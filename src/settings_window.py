@@ -316,7 +316,7 @@ class SettingsWindow:
     def show(self):
         """Build and display the settings window."""
         self.window = tk.Toplevel(self.root)
-        self.window.title("DirectTrans Settings")
+        self.window.title("DirectTrans Settings v1.0")
         self.window.geometry("580x630")
         self.window.resizable(True, True)
         self.window.minsize(580, 500)
@@ -396,9 +396,9 @@ class SettingsWindow:
         header = tk.Frame(self.window, bg=self.MANTLE, pady=8)
         header.pack(fill='x', padx=0, pady=0)  # zero margin, flush to top
 
-        # Left aligned container for Logo + Title + Info icon
-        left_container = tk.Frame(header, bg=self.MANTLE)
-        left_container.pack(side='left', padx=10)
+        # Top row container for Logo + Title
+        top_row = tk.Frame(header, bg=self.MANTLE)
+        top_row.pack(fill='x', padx=10, pady=(0, 6))
 
         # Load logo-direct-trans.png with PIL and fallback to unicode if needed
         logo_loaded = False
@@ -418,7 +418,7 @@ class SettingsWindow:
                 img = img.resize((24, 24), Image.Resampling.LANCZOS)
                 self.logo_img = ImageTk.PhotoImage(img)
 
-                logo_lbl = tk.Label(left_container, image=self.logo_img, bg=self.MANTLE)
+                logo_lbl = tk.Label(top_row, image=self.logo_img, bg=self.MANTLE)
                 logo_lbl.pack(side='left', padx=(0, 6))
                 logo_loaded = True
             except Exception as e:
@@ -428,27 +428,20 @@ class SettingsWindow:
         if not logo_loaded:
             # Fallback to standard gear character
             logo_lbl = tk.Label(
-                left_container, text="⚙", fg=self.PRIMARY, bg=self.MANTLE,
+                top_row, text="⚙", fg=self.PRIMARY, bg=self.MANTLE,
                 font=('Segoe UI', 12, 'bold')
             )
             logo_lbl.pack(side='left', padx=(0, 6))
 
         # Title Label
         self.title_label = tk.Label(
-            left_container, text="DirectTrans",
+            top_row, text="DirectTrans",
             fg=self.TEXT_COLOR, bg=self.MANTLE,
             font=('Georgia', 14, 'bold')
         )
         self.title_label.pack(side='left')
 
-        # Info icon "i" for User Manual
-        info_lbl = tk.Label(
-            left_container, text="ⓘ", fg=self.SUBTEXT, bg=self.MANTLE,
-            font=('Segoe UI', 10), cursor='hand2'
-        )
-        info_lbl.pack(side='left', padx=(6, 0))
-        
-        def open_user_manual(event):
+        def open_user_manual(event=None):
             import sys
             if getattr(sys, 'frozen', False):
                 base = sys._MEIPASS
@@ -467,13 +460,9 @@ class SettingsWindow:
                 online_url = 'https://github.com/nguyenthanh-viet/direct-trans'
                 webbrowser.open(online_url)
                 
-        info_lbl.bind('<Button-1>', open_user_manual)
-        info_lbl.bind('<Enter>', lambda e: info_lbl.config(fg=self.PRIMARY))
-        info_lbl.bind('<Leave>', lambda e: info_lbl.config(fg=self.SUBTEXT))
-
-        # Right aligned container for UI Language dropdown
-        right_container = tk.Frame(header, bg=self.MANTLE)
-        right_container.pack(side='right', padx=(10, 20))
+        # Bottom row container for controls
+        bottom_row = tk.Frame(header, bg=self.MANTLE)
+        bottom_row.pack(fill='x', padx=10)
 
         ui_languages = [
             ("Tiếng Việt", "vi"), 
@@ -489,10 +478,25 @@ class SettingsWindow:
         self.ui_lang_var = tk.StringVar(value=reverse_ui_lang_map.get(self.current_lang, "Tiếng Việt"))
 
         self.lang_ui_combo = ttk.Combobox(
-            right_container, textvariable=self.ui_lang_var,
+            bottom_row, textvariable=self.ui_lang_var,
             values=ui_lang_names, state='readonly', width=14
         )
-        self.lang_ui_combo.pack(side='right')
+        self.lang_ui_combo.pack(side='left', padx=(0, 6))
+
+        self.manual_btn = tk.Button(
+            bottom_row, text="User manual",
+            fg='#ffffff', bg=self.PRIMARY, bd=0, cursor='hand2', font=('Segoe UI', 9, 'bold'),
+            padx=16, pady=2,
+            command=open_user_manual
+        )
+        self.manual_btn.pack(side='left', padx=(0, 6))
+
+        self.update_btn = tk.Button(
+            bottom_row, text="Update",
+            fg='#ffffff', bg=self.PRIMARY, bd=0, cursor='hand2', font=('Segoe UI', 9, 'bold'),
+            padx=16, pady=2
+        )
+        self.update_btn.pack(side='left')
 
         def on_ui_lang_selected(event):
             selected_name = self.ui_lang_var.get()
@@ -511,7 +515,7 @@ class SettingsWindow:
             font=('Segoe UI', 10, 'bold'),
             labelanchor='nw', padx=10, pady=8
         )
-        self.provider_lf.pack(fill='x', padx=10, pady=(6, 4))
+        self.provider_lf.pack(fill='x', padx=10, pady=(0, 4))
 
         row = tk.Frame(self.provider_lf, bg=self.BASE)
         row.pack(fill='x')
@@ -562,6 +566,7 @@ class SettingsWindow:
 
     def _create_api_section(self):
         """API keys section with dynamic frames based on selected provider."""
+        t = self.TRANSLATIONS.get(self.current_lang, self.TRANSLATIONS['vi'])
         self.api_lf = tk.LabelFrame(
             self.scroll_frame, text=" 🔑 API Keys ",
             fg=self.PRIMARY, bg=self.BASE,
@@ -711,12 +716,12 @@ class SettingsWindow:
         self.gemini_status_lbl = tk.Label(gemini_frame, text="", fg=self.TEXT_COLOR, bg=self.BASE, font=('Segoe UI', 9, 'bold'), anchor='e', width=10)
         self.gemini_status_lbl.grid(row=1, column=3, sticky='e', padx=(4, 4), pady=2)
 
-        gemini_btn_save = tk.Button(gemini_frame, text="Lưu Key", fg='#ffffff', bg=self.PRIMARY, bd=0, font=('Segoe UI', 9, 'bold'), padx=8, pady=2, cursor='hand2')
-        gemini_btn_save.grid(row=1, column=4, sticky='e', padx=(4, 0), pady=2)
+        self.gemini_btn_save = tk.Button(gemini_frame, text=t['save_btn'], fg='#ffffff', bg=self.PRIMARY, bd=0, font=('Segoe UI', 9, 'bold'), padx=8, pady=2, cursor='hand2')
+        self.gemini_btn_save.grid(row=1, column=4, sticky='e', padx=(4, 0), pady=2)
 
-        gemini_btn_save.config(command=lambda: self._quick_save_key('gemini', self.gemini_entry.get().strip(), self.gemini_status_lbl))
-        gemini_btn_test.config(command=lambda: self._test_key('gemini', self.gemini_entry.get().strip(), self.gemini_status_lbl, self.gemini_model_combo, gemini_btn_fetch, gemini_btn_save, gemini_btn_test))
-        gemini_btn_fetch.config(command=lambda bf=gemini_btn_fetch, bs=gemini_btn_save, bt=gemini_btn_test: _fetch_provider_models('gemini', self.gemini_entry.get().strip(), self.gemini_model_combo, bf, bs, bt))
+        self.gemini_btn_save.config(command=lambda: self._quick_save_key('gemini', self.gemini_entry.get().strip(), self.gemini_status_lbl))
+        gemini_btn_test.config(command=lambda: self._test_key('gemini', self.gemini_entry.get().strip(), self.gemini_status_lbl, self.gemini_model_combo, gemini_btn_fetch, self.gemini_btn_save, gemini_btn_test))
+        gemini_btn_fetch.config(command=lambda bf=gemini_btn_fetch, bs=self.gemini_btn_save, bt=gemini_btn_test: _fetch_provider_models('gemini', self.gemini_entry.get().strip(), self.gemini_model_combo, bf, bs, bt))
 
         self.api_frames['gemini'] = gemini_frame
 
@@ -761,12 +766,12 @@ class SettingsWindow:
         self.groq_status_lbl = tk.Label(groq_frame, text="", fg=self.TEXT_COLOR, bg=self.BASE, font=('Segoe UI', 9, 'bold'), anchor='e', width=10)
         self.groq_status_lbl.grid(row=1, column=3, sticky='e', padx=(4, 4), pady=2)
 
-        groq_btn_save = tk.Button(groq_frame, text="Lưu Key", fg='#ffffff', bg=self.PRIMARY, bd=0, font=('Segoe UI', 9, 'bold'), padx=8, pady=2, cursor='hand2')
-        groq_btn_save.grid(row=1, column=4, sticky='e', padx=(4, 0), pady=2)
+        self.groq_btn_save = tk.Button(groq_frame, text=t['save_btn'], fg='#ffffff', bg=self.PRIMARY, bd=0, font=('Segoe UI', 9, 'bold'), padx=8, pady=2, cursor='hand2')
+        self.groq_btn_save.grid(row=1, column=4, sticky='e', padx=(4, 0), pady=2)
 
-        groq_btn_save.config(command=lambda: self._quick_save_key('groq', self.groq_entry.get().strip(), self.groq_status_lbl))
-        groq_btn_test.config(command=lambda: self._test_key('groq', self.groq_entry.get().strip(), self.groq_status_lbl, self.groq_model_combo, groq_btn_fetch, groq_btn_save, groq_btn_test))
-        groq_btn_fetch.config(command=lambda bf=groq_btn_fetch, bs=groq_btn_save, bt=groq_btn_test: _fetch_provider_models('groq', self.groq_entry.get().strip(), self.groq_model_combo, bf, bs, bt))
+        self.groq_btn_save.config(command=lambda: self._quick_save_key('groq', self.groq_entry.get().strip(), self.groq_status_lbl))
+        groq_btn_test.config(command=lambda: self._test_key('groq', self.groq_entry.get().strip(), self.groq_status_lbl, self.groq_model_combo, groq_btn_fetch, self.groq_btn_save, groq_btn_test))
+        groq_btn_fetch.config(command=lambda bf=groq_btn_fetch, bs=self.groq_btn_save, bt=groq_btn_test: _fetch_provider_models('groq', self.groq_entry.get().strip(), self.groq_model_combo, bf, bs, bt))
 
         self.api_frames['groq'] = groq_frame
 
@@ -1449,7 +1454,12 @@ class SettingsWindow:
 
         # self.model_lbl.config(text=t['model_label'], font=small_font)
         # self.reload_btn.config(text=t['load_models'], font=small_font)
-        # self.gemini_save_btn.config(text=t['save_btn'], font=small_font)
+        if hasattr(self, 'gemini_btn_save'):
+            self.gemini_btn_save.config(text=t['save_btn'])
+        if hasattr(self, 'groq_btn_save'):
+            self.groq_btn_save.config(text=t['save_btn'])
+        if hasattr(self, 'mistral_btn_save'):
+            self.mistral_btn_save.config(text=t['save_btn'])
         # self.gemini_test_btn.config(text=t['test_btn'], font=small_font)
         self.google_free_lbl.config(text=t['google_free_note'], font=italic_font)
 
