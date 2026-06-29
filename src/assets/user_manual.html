@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DirectTrans - User Manual</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        :root {
+            --base: #faf9f5;
+            --mantle: #efe9de;
+            --surface: #f5f0e8;
+            --border: #e6dfd8;
+            --ink: #141413;
+            --muted: #6c6a64;
+            --coral: #cc785c;
+            --coral-active: #a9583e;
+            --teal: #5db8a6;
+            --pass-color: #5db872;
+            --fail-color: #c64545;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--base);
+            color: var(--ink);
+            line-height: 1.6;
+            padding: 40px 20px;
+            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .container {
+            max-width: 1400px;
+            width: 95%;
+            margin: 0 auto;
+            background-color: #ffffff;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 24px rgba(20, 20, 19, 0.05);
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 24px;
+            margin-bottom: 32px;
+        }
+
+        .logo {
+            width: 52px;
+            height: 52px;
+            margin-right: 18px;
+        }
+
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        h2 {
+            font-size: 22px;
+            color: var(--coral);
+            margin-top: 40px;
+            margin-bottom: 16px;
+            border-left: 4px solid var(--coral);
+            padding-left: 12px;
+        }
+
+        p {
+            margin-bottom: 16px;
+            color: #3d3d3a;
+        }
+
+        a {
+            color: var(--coral);
+            text-decoration: none;
+            font-weight: 600;
+            border-bottom: 1px dashed var(--coral);
+        }
+
+        a:hover {
+            color: var(--coral-active);
+            border-bottom-style: solid;
+        }
+
+        ul {
+            margin-bottom: 20px;
+            padding-left: 24px;
+        }
+
+        li {
+            margin-bottom: 8px;
+            color: #3d3d3a;
+        }
+
+        .highlight {
+            font-weight: bold;
+            color: var(--ink);
+        }
+
+        .shortcut {
+            background-color: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-family: monospace;
+            font-size: 13px;
+        }
+
+        .step-header {
+            display: flex;
+            align-items: center;
+            font-weight: bold;
+            margin-top: 24px;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .step-num {
+            display: inline-block;
+            background-color: var(--coral);
+            color: white;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 24px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .graphic-container {
+            margin: 16px 0;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            background-color: #ffffff;
+            display: inline-block;
+        }
+
+        .app-screenshot {
+            display: block;
+            max-width: 100%;
+            height: auto;
+        }
+
+        footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--muted);
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <svg class="logo" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M128 32L210 100L170 190L128 150L86 190L46 100L128 32Z" fill="#cc785c"/>
+            <path d="M128 32L170 190L128 150L128 32Z" fill="#a9583e"/>
+            <path d="M128 150L210 100L170 190L128 150Z" fill="#e8a55a"/>
+            <path d="M128 150L46 100L86 190L128 150Z" fill="#efe9de"/>
+        </svg>
+        <div>
+            <h1>DirectTrans</h1>
+            <div class="subtitle">Smart clipboard translation & hotkey utility for Windows</div>
+        </div>
+    </header>
+
+    <main>
+        <h2>1. General Overview</h2>
+        <p>DirectTrans is a system-wide translation utility for Windows. It allows you to select and translate text in any application using global hotkeys.</p>
+        <p>The application supports four translation providers: <strong>Google Free</strong> (no key required), <strong>Gemini</strong>, <strong>GroqCloud</strong>, and <strong>Mistral</strong>. The latter three require an API key.</p>
+        
+        <h2>2. Retrieving API Keys</h2>
+        <p>To use AI models, register for an API Key from your preferred provider:</p>
+        <ul>
+            <li><strong>Google Gemini</strong>: <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a></li>
+            <li><strong>GroqCloud</strong>: <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></li>
+            <li><strong>Mistral AI</strong>: <a href="https://console.mistral.ai/api-keys" target="_blank">console.mistral.ai/api-keys</a></li>
+        </ul>
+
+        <h2>3. Configuring Your API Key</h2>
+
+        <div class="step-header">
+            <span class="step-num">1</span>
+            <span>Paste the Key</span>
+        </div>
+        <p>Open the DirectTrans Settings window and select your preferred <span class="highlight">Provider</span>. Paste your key into the <span class="highlight">API key</span> input field.</p>
+
+        <div class="graphic-container">
+            <img class="app-screenshot" src="screenshot_settings.png" alt="Settings UI Screenshot" />
+        </div>
+
+        <div class="step-header">
+            <span class="step-num">2</span>
+            <span>Load Available Models</span>
+        </div>
+        <p>Click the <span class="highlight">"↻ Load Models"</span> button to filter and list available models for translation.</p>
+
+        <div class="step-header">
+            <span class="step-num">3</span>
+            <span>Test & Save Key</span>
+        </div>
+        <p>Click the <span class="highlight">"Test"</span> button to verify the connection. If successful, the adjacent badge will turn green and show <span class="highlight" style="color: var(--pass-color);">"Pass"</span>. If it fails, it will turn red showing <span class="highlight" style="color: var(--fail-color);">"Fail"</span>.</p>
+        <p>Click <span class="highlight">"Save Key"</span> to save your configuration. (Note: Successfully Loading Models or Testing will also automatically save your key).</p>
+
+        <h2>4. Hotkeys & Text Replacement</h2>
+        <p>You can configure hotkeys to translate text with 2 visual modes:</p>
+        
+        <div class="step-header">
+            <span class="step-num">A</span>
+            <span>Popup Mode (Show results)</span>
+        </div>
+        <p>Select text and press your popup hotkey (e.g. <span class="shortcut">Ctrl+Shift+V</span>). A popup will appear. Click <span class="highlight" style="color: var(--teal);">"Copy"</span> to copy the content or <span class="highlight" style="color: var(--coral);">"Replace"</span> to overwrite the selected text in your active document.</p>
+
+        <div class="graphic-container">
+            <img class="app-screenshot" src="screenshot_popup.png" alt="Popup UI Screenshot" />
+        </div>
+
+        <div class="step-header">
+            <span class="step-num">B</span>
+            <span>Replace Mode (Direct replacement)</span>
+        </div>
+        <p>Select text and press your replace hotkey (e.g. <span class="shortcut">Ctrl+Shift+E</span>). The selected text will be directly overwritten with its translation instantly without showing a popup window.</p>
+
+        <h2>5. UI Language Support</h2>
+        <p>The top-right corner of the Settings window features a language dropdown supporting 5 interface languages: Vietnamese, English, Korean, Chinese, and Japanese. The application dynamically updates labels and fonts when changed.</p>
+
+    </main>
+
+    <footer>
+        <p>© 2026 DirectTrans. Offline User Manual.</p>
+    </footer>
+</div>
+
+</body>
+</html>

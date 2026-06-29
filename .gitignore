@@ -1,0 +1,19 @@
+# Build
+build/
+dist/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Runtime
+*.log
+
+# Debug artifacts
+ppt_clipboard.rtf
+Presentation1.pptx
+
+# User config (use config.example.json as template)
+config.json
