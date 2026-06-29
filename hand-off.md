@@ -13,3 +13,5 @@
 - Added Update button and restyled User manual button to match Save Key
 
 - Redesigned header layout to place language combobox, User manual, and Update buttons horizontally under the app title
+
+- Bump version to v1.0.3 and update settings window title

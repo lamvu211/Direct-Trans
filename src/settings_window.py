@@ -316,7 +316,7 @@ class SettingsWindow:
     def show(self):
         """Build and display the settings window."""
         self.window = tk.Toplevel(self.root)
-        self.window.title("DirectTrans Settings v1.0")
+        self.window.title("DirectTrans Settings v1.0.3")
         self.window.geometry("580x630")
         self.window.resizable(True, True)
         self.window.minsize(580, 500)
