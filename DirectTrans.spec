@@ -22,7 +22,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='DirectTrans_v1.0.1',
+    name='DirectTrans_v1.0.2',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

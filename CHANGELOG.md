@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.2
+- Improved system prompt for translation quality: added grammar rules, terminology constraints, abbreviation handling, and phonetic transcription for Asian proper names.
+- Added .agent directory to .gitignore.
+
 ## v1.0.1
 - Added GitHub Release link to "Update" button in Settings window
 - Rewrote project README.md with detailed instructions

@@ -1,10 +1,10 @@
 # Project Hand-off
-**Current Version:** v1.0.1
+**Current Version:** v1.0.2
 
 ## Recent Changes
-- Add GitHub Release link to Update button in Settings Window.
-- Bump version to v1.0.1.
-- Update README.md with detailed instructions.
+- Updated the AI system prompt to enforce strict translation rules, grammar, and proper name phonetic transcriptions.
+- Excluded .agent/ in .gitignore.
+- Bumped version to v1.0.2.
 
 ## Next Steps
 - Verify the UI adjustments are satisfactory.

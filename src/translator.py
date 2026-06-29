@@ -18,6 +18,19 @@ class TranslationBackend(ABC):
         pass
 
 
+SYSTEM_PROMPT = """You are a professional translator. Translate the given text to {target_lang}.
+
+Core Rules:
+- Return ONLY the translated text. No explanations, no comments, no asking, and no yapping.
+- Translate with 100% accuracy; no additions, deletions, or interpretations.
+- Preserve all line breaks, punctuation, and paragraph structure exactly as the original.
+
+Tone & Terminology:
+- Ensure correct grammar. Use formal, objective, and normative language.
+- Use relevant industry terminology where appropriate, but otherwise prefer common, easy-to-understand words.
+- Do not self-explain any abbreviations; keep them as in the original text or use their standard equivalents without extra notes.
+- For proper names in Korean, Chinese, Japanese, etc., please translate them into English phonetic transcription."""
+
 class GeminiTranslator(TranslationBackend):
     def __init__(self):
         self.api_key = ""
@@ -33,7 +46,7 @@ class GeminiTranslator(TranslationBackend):
 
         payload = {
             "systemInstruction": {
-                "parts": [{"text": f"You are a professional translator. Translate the given text to {target_lang}. Return ONLY the translated text, no explanations, no extra formatting. Preserve all line breaks, punctuation, and paragraph structure exactly."}]
+                "parts": [{"text": SYSTEM_PROMPT.format(target_lang=target_lang)}]
             },
             "contents": [{
                 "parts": [{"text": text}]
@@ -97,7 +110,7 @@ class GroqTranslator(TranslationBackend):
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": f"You are a professional translator. Translate the given text to {target_lang}. Return ONLY the translated text, no explanations, no extra formatting. Preserve all line breaks, punctuation, and paragraph structure exactly."},
+                {"role": "system", "content": SYSTEM_PROMPT.format(target_lang=target_lang)},
                 {"role": "user", "content": text}
             ],
             "temperature": 0.3
@@ -152,7 +165,7 @@ class MistralTranslator(TranslationBackend):
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": f"You are a professional translator. Translate the given text to {target_lang}. Return ONLY the translated text, no explanations, no extra formatting. Preserve all line breaks, punctuation, and paragraph structure exactly."},
+                {"role": "system", "content": SYSTEM_PROMPT.format(target_lang=target_lang)},
                 {"role": "user", "content": text}
             ],
             "temperature": 0.3
