@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.1
+- Added GitHub Release link to "Update" button in Settings window
+- Rewrote project README.md with detailed instructions
+- Uploaded project to GitHub repository
+
 ## v1.0
 - Reverted version back to v1.0
 - Fixed white gap when scrolling up in Settings window

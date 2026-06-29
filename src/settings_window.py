@@ -491,10 +491,15 @@ class SettingsWindow:
         )
         self.manual_btn.pack(side='left', padx=(0, 6))
 
+        def open_update_link():
+            import webbrowser
+            webbrowser.open("https://github.com/lamvu211/Direct-Trans/releases/latest")
+
         self.update_btn = tk.Button(
             bottom_row, text="Update",
             fg='#ffffff', bg=self.PRIMARY, bd=0, cursor='hand2', font=('Segoe UI', 9, 'bold'),
-            padx=16, pady=2
+            padx=16, pady=2,
+            command=open_update_link
         )
         self.update_btn.pack(side='left')
 

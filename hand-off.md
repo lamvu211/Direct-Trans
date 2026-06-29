@@ -1,9 +1,10 @@
 # Project Hand-off
-**Current Version:** v1.0
+**Current Version:** v1.0.1
 
 ## Recent Changes
-- UI tweaks in Settings Window (title, scrolling gap, manual button placement, translation for save buttons).
-- Version reverted to v1.0 in `DirectTrans.spec` and `build.bat`.
+- Add GitHub Release link to Update button in Settings Window.
+- Bump version to v1.0.1.
+- Update README.md with detailed instructions.
 
 ## Next Steps
 - Verify the UI adjustments are satisfactory.
