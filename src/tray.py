@@ -18,19 +18,19 @@ TRAY_STRINGS = {
 }
 
 class TrayIcon:
-    def __init__(self, on_settings, on_toggle, on_quit, config=None):
+    def __init__(self, on_settings, on_toggle, on_quit, config=None, is_enabled=None):
         """
         on_settings: callback to open Settings window (will be run on main thread via root.after)
         on_toggle: callback to toggle translation on/off
         on_quit: callback to quit the app
+        is_enabled: callable that returns current enabled state
         """
         self.on_settings = on_settings
         self.on_toggle = on_toggle
         self.on_quit = on_quit
-        self.enabled = True
+        self.is_enabled = is_enabled or (lambda: True)
         self.icon = None
-        lang = config.data.get('ui_language', 'vi') if config else 'vi'
-        self._strings = TRAY_STRINGS.get(lang, TRAY_STRINGS['vi'])
+        self.config = config
 
         # Load or create image
         image = self._load_icon_image()
@@ -42,6 +42,11 @@ class TrayIcon:
             "DirectTrans",
             menu=self._build_menu()
         )
+
+    def _get_strings(self) -> dict:
+        """Get tray menu strings based on current UI language from config."""
+        lang = self.config.data.get('ui_language', 'vi') if self.config else 'vi'
+        return TRAY_STRINGS.get(lang, TRAY_STRINGS['vi'])
 
     def _get_icon_path(self) -> str:
         """Get the path to the icon file."""
@@ -94,18 +99,24 @@ class TrayIcon:
 
     def _build_menu(self):
         return pystray.Menu(
-            pystray.MenuItem(self._strings['settings'], lambda icon, item: self.on_settings(), default=True),
             pystray.MenuItem(
-                lambda item: self._strings['disable'] if self.enabled else self._strings['enable'],
+                lambda item: self._get_strings()['settings'],
+                lambda icon, item: self.on_settings(),
+                default=True
+            ),
+            pystray.MenuItem(
+                lambda item: self._get_strings()['disable'] if self.is_enabled() else self._get_strings()['enable'],
                 lambda icon, item: self._toggle()
             ),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem(self._strings['quit'], lambda icon, item: self.on_quit())
+            pystray.MenuItem(
+                lambda item: self._get_strings()['quit'],
+                lambda icon, item: self.on_quit()
+            )
         )
 
     def _toggle(self):
         """Toggle enabled state and update menu."""
-        self.enabled = not self.enabled
         self.on_toggle()
         if self.icon:
             self.icon.update_menu()

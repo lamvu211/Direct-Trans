@@ -9,17 +9,28 @@ import sys
 import uuid
 import copy
 
+from constants import (
+    DEFAULT_FALLBACK_ORDER,
+    DEFAULT_PROVIDER,
+    MODE_POPUP,
+    PROVIDER_GEMINI,
+    PROVIDER_GROQ,
+    PROVIDER_MISTRAL,
+    PROVIDER_GOOGLE_FREE,
+    PROVIDERS_NEED_API_KEY,
+)
+
 
 class Config:
     DEFAULT_CONFIG = {
-        "translation_provider": "gemini",
+        "translation_provider": DEFAULT_PROVIDER,
         "api_keys": {
-            "gemini": "",
-            "groq": "",
-            "mistral": ""
+            PROVIDER_GEMINI: "",
+            PROVIDER_GROQ: "",
+            PROVIDER_MISTRAL: "",
         },
         "fallback_enabled": True,
-        "fallback_order": ["gemini", "groq", "mistral", "google_free"],
+        "fallback_order": list(DEFAULT_FALLBACK_ORDER),
         "gemini_model": "gemini-3.1-flash-lite",
         "groq_model": "openai/gpt-oss-120b",
         "mistral_model": "mistral-large-latest",
@@ -30,34 +41,38 @@ class Config:
                 "key_combo": "ctrl+shift+v",
                 "target_language_code": "vi",
                 "target_language_name": "Tiếng Việt",
-                "mode": "popup"
+                "mode": MODE_POPUP
             },
             {
                 "id": str(uuid.uuid4()),
                 "key_combo": "ctrl+shift+e",
                 "target_language_code": "en",
                 "target_language_name": "Tiếng Anh",
-                "mode": "popup"
+                "mode": MODE_POPUP
             }
         ]
     }
 
     def __init__(self):
         self.config_path = self._resolve_config_path()
+        self._was_created = False
         self.data = self._load()
+
+
 
     def _resolve_config_path(self) -> str:
         if getattr(sys, 'frozen', False):
             base = os.path.dirname(sys.executable)
         else:
-            base = os.path.dirname(os.path.abspath(__file__))
-            base = os.path.dirname(base)  # up one level from src/
+            base = os.path.join(os.environ.get('APPDATA', ''), 'DirectTrans')
+            os.makedirs(base, exist_ok=True)
         return os.path.join(base, 'config.json')
 
     def _load(self) -> dict:
         if not os.path.exists(self.config_path):
             data = copy.deepcopy(self.DEFAULT_CONFIG)
             self._write(data)
+            self._was_created = True
             return data
 
         try:
@@ -89,9 +104,32 @@ class Config:
     def save(self):
         self._write(self.data)
 
+    def _encrypt_key(self, plain_text: str) -> str:
+        if not plain_text:
+            return ""
+        try:
+            import win32crypt
+            encrypted_bytes = win32crypt.CryptProtectData(plain_text.encode('utf-8'), None, None, None, None, 0)
+            return encrypted_bytes.hex()
+        except Exception:
+            return plain_text
+
+    def _decrypt_key(self, cipher_hex: str) -> str:
+        if not cipher_hex:
+            return ""
+        try:
+            import win32crypt
+            cipher_bytes = bytes.fromhex(cipher_hex)
+            _, decrypted_bytes = win32crypt.CryptUnprotectData(cipher_bytes, None, None, None, 0)
+            return decrypted_bytes.decode('utf-8')
+        except Exception as e:
+            import logging
+            logging.warning(f"Decrypt API key failed: {e}. Key might be corrupted or from a different user context.")
+            return ""
+
     # --- Provider ---
     def get_provider(self) -> str:
-        return self.data.get('translation_provider', 'gemini')
+        return self.data.get('translation_provider', DEFAULT_PROVIDER)
 
     def set_provider(self, provider: str):
         self.data['translation_provider'] = provider
@@ -99,12 +137,13 @@ class Config:
 
     # --- API Keys ---
     def get_api_key(self, provider: str) -> str:
-        return self.data.get('api_keys', {}).get(provider, '')
+        val = self.data.get('api_keys', {}).get(provider, '')
+        return self._decrypt_key(val)
 
     def set_api_key(self, provider: str, key: str):
         if 'api_keys' not in self.data:
             self.data['api_keys'] = {}
-        self.data['api_keys'][provider] = key
+        self.data['api_keys'][provider] = self._encrypt_key(key)
         self.save()
 
     def get_gemini_model(self) -> str:
@@ -127,6 +166,21 @@ class Config:
     def set_mistral_model(self, model: str):
         self.data['mistral_model'] = model
         self.save()
+
+    def is_first_run(self) -> bool:
+        """True when config.json was created on this launch."""
+        return self._was_created
+
+    def needs_setup(self) -> bool:
+        """True when Settings should open on startup (first run or missing API key)."""
+        if self.is_first_run():
+            return True
+        provider = self.get_provider()
+        if provider == PROVIDER_GOOGLE_FREE:
+            return False
+        if provider in PROVIDERS_NEED_API_KEY and not self.get_api_key(provider):
+            return True
+        return False
 
     # --- Hotkeys ---
     def get_hotkeys(self) -> list:
@@ -162,11 +216,10 @@ class Config:
     def is_auto_start(self) -> bool:
         return self.data.get('auto_start', False)
 
-    def set_auto_start(self, enabled: bool):
-        self.data['auto_start'] = enabled
-        self.save()
+    def set_auto_start(self, enabled: bool) -> bool:
         try:
             import winreg
+            import logging
             key = winreg.OpenKey(
                 winreg.HKEY_CURRENT_USER,
                 r"Software\Microsoft\Windows\CurrentVersion\Run",
@@ -174,12 +227,12 @@ class Config:
             )
             if enabled:
                 if getattr(sys, 'frozen', False):
-                    exe_path = sys.executable
+                    exe_path = f'"{sys.executable}"'
                 else:
                     main_path = os.path.abspath(os.path.join(
                         os.path.dirname(__file__), 'main.py'
                     ))
-                    exe_path = f'pythonw "{main_path}"'
+                    exe_path = f'"{sys.executable}" "{main_path}"'
                 winreg.SetValueEx(key, "DirectTrans", 0, winreg.REG_SZ, exe_path)
             else:
                 try:
@@ -187,10 +240,11 @@ class Config:
                 except FileNotFoundError:
                     pass
             winreg.CloseKey(key)
-        except Exception:
-            pass  # Registry access may fail in some environments
+            self.data['auto_start'] = enabled
+            self.save()
+            return True
+        except Exception as e:
+            import logging
+            logging.warning("Failed to update auto-start registry: %s", e)
+            return False
 
-    def is_first_run(self) -> bool:
-        """Check if this is the first run (no API keys configured)."""
-        gemini = self.get_api_key('gemini')
-        return not gemini

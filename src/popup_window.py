@@ -310,6 +310,13 @@ class PopupWindow:
         import time
         from clipboard_util import ClipboardUtil
 
+        # Capture the foreground window before withdrawing popup
+        import ctypes
+        try:
+            target_hwnd = ctypes.windll.user32.GetForegroundWindow()
+        except Exception:
+            target_hwnd = None
+
         # Hide window immediately so focus returns to the original active application
         try:
             self.window.withdraw()
@@ -318,8 +325,14 @@ class PopupWindow:
 
         def perform_paste():
             # Wait for popup to fully hide before simulating paste
-            # so the target application regains focus properly
             time.sleep(0.25)
+            # Restore focus to original target window
+            if target_hwnd:
+                try:
+                    ctypes.windll.user32.SetForegroundWindow(target_hwnd)
+                    time.sleep(0.05)
+                except Exception:
+                    pass
             try:
                 ClipboardUtil.replace_selected_text(
                     self.translated_text,

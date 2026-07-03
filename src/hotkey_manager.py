@@ -24,7 +24,10 @@ def parse_hotkey(combo_str):
     """
     Parses a hotkey string like 'ctrl+shift+v' into (modifiers, vk_code).
     """
-    parts = [p.strip().lower() for p in combo_str.split('+')]
+    if not combo_str or not isinstance(combo_str, str):
+        return 0, 0
+        
+    parts = [p.strip().lower() for p in combo_str.split('+') if p.strip()]
     modifiers = 0
     vk = 0
     for part in parts:

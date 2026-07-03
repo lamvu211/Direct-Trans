@@ -28,6 +28,76 @@ if getattr(sys, 'frozen', False):
     if sys.stderr is None:
         sys.stderr = DummyWriter()
 
+def kill_old_processes():
+    """Kill any existing DirectTrans.exe processes (old versions or stale autostart instances).
+    This ensures the new version always takes over cleanly.
+    Waits for processes to fully terminate before returning.
+    """
+    try:
+        import subprocess
+        current_pid = os.getpid()
+
+        # List ALL processes, then filter for any exe starting with "DirectTrans"
+        # This catches versioned names like DirectTrans_v1.0.4.exe
+        result = subprocess.run(
+            ['tasklist', '/FO', 'CSV', '/NH'],
+            capture_output=True, text=True, timeout=5
+        )
+        killed_any = False
+        for line in result.stdout.strip().split('\n'):
+            if not line.strip():
+                continue
+            parts = line.strip('"').split('","')
+            if len(parts) >= 2:
+                proc_name = parts[0].strip('"').lower()
+                if not proc_name.startswith('directtrans'):
+                    continue
+                try:
+                    pid = int(parts[1].strip('"'))
+                    if pid != current_pid:
+                        subprocess.run(['taskkill', '/PID', str(pid), '/F'],
+                                       capture_output=True, timeout=5)
+                        killed_any = True
+                except (ValueError, subprocess.SubprocessError):
+                    pass
+
+        # Wait for killed processes to fully terminate (up to 3 seconds)
+        if killed_any:
+            import time
+            for _ in range(30):
+                time.sleep(0.1)
+                check = subprocess.run(
+                    ['tasklist', '/FO', 'CSV', '/NH'],
+                    capture_output=True, text=True, timeout=5
+                )
+                still_alive = False
+                for line in check.stdout.strip().split('\n'):
+                    if not line.strip() or 'INFO' in line.upper():
+                        continue
+                    parts = line.strip('"').split('","')
+                    if len(parts) >= 2:
+                        proc_name = parts[0].strip('"').lower()
+                        if not proc_name.startswith('directtrans'):
+                            continue
+                        try:
+                            pid = int(parts[1].strip('"'))
+                            if pid != current_pid:
+                                still_alive = True
+                        except ValueError:
+                            pass
+                if not still_alive:
+                    break
+    except Exception:
+        pass
+    
+    # Clean up any stale signal files left by killed processes
+    signal_file = os.path.join(LOG_DIR, 'directtrans.signal')
+    try:
+        if os.path.exists(signal_file):
+            os.remove(signal_file)
+    except Exception:
+        pass
+
 def check_single_instance():
     """Checks if another instance is running using a Windows Mutex.
     If yes, writes a signal file to restore the existing instance and exits.
@@ -46,7 +116,9 @@ def check_single_instance():
         win32api.CloseHandle(sys.app_mutex)
         sys.exit(0)
 
-# Check single instance before starting anything else
+# Kill old/stale processes first, then check single instance
+if getattr(sys, 'frozen', False):
+    kill_old_processes()
 check_single_instance()
 
 import logging.handlers
@@ -69,6 +141,7 @@ else:
 sys.path.insert(0, BASE_DIR)
 
 from config import Config
+from constants import MODE_POPUP, MODE_REPLACE
 from tray import TrayIcon
 from hotkey_manager import HotkeyManager
 from translator import TranslationManager
@@ -80,12 +153,15 @@ from settings_window import SettingsWindow
 class DirectTransApp:
     def __init__(self):
         self.config = Config()
+        self._heal_auto_start_path()
         self.translator = TranslationManager(self.config)
         self.enabled = True
         self.root = None
         self.tray = None
         self.hotkey_manager = None
         self.settings_window = None
+        self.translation_thread = None
+        self._processing_lock = threading.Lock()
 
     def run(self):
         """Start the application on the main thread."""
@@ -93,7 +169,8 @@ class DirectTransApp:
             on_settings=self._safe_show_settings,
             on_toggle=self._safe_toggle_enabled,
             on_quit=self._safe_quit,
-            config=self.config
+            config=self.config,
+            is_enabled=lambda: self.enabled
         )
         # Start pystray tray icon on a background thread
         logging.info("Starting tray icon on background thread.")
@@ -122,9 +199,10 @@ class DirectTransApp:
         # Start single-instance listener using filesystem poll
         self._start_single_instance_listener()
 
-        # Always open settings on startup so user sees the interface
-        logging.info("Opening settings window on startup.")
-        self.root.after(1000, self._show_settings)
+        # Open settings on first run or when primary provider has no API key
+        if self.config.needs_setup():
+            logging.info("Opening settings window on startup (first run or missing API key).")
+            self.root.after(1000, self._show_settings)
 
         print("DirectTrans is running. Use system tray icon to access settings.")
         logging.info("DirectTrans initialized and running.")
@@ -149,9 +227,9 @@ class DirectTransApp:
                     pass
             self._show_settings()
         
-        # Schedule the next check in 500ms
+        # Schedule the next check in 2000ms (restore window doesn't need sub-second responsiveness)
         if self.root:
-            self.root.after(500, self._start_single_instance_listener)
+            self.root.after(2000, self._start_single_instance_listener)
 
     def _safe_show_settings(self):
         if self.root:
@@ -167,17 +245,15 @@ class DirectTransApp:
 
     def _on_hotkey(self, hotkey_config: dict):
         """Callback when user presses a registered hotkey."""
-        import time
-        now = time.time()
-        if now - getattr(self, '_last_hotkey_time', 0) < 1.0:
-            logging.info("Debounced rapid hotkey trigger.")
+        if not self._processing_lock.acquire(blocking=False):
             return
-        self._last_hotkey_time = now
 
         if not self.enabled:
             logging.info("Hotkey pressed but app is paused.")
+            self._processing_lock.release()
             return
         if not self.root:
+            self._processing_lock.release()
             return
 
         logging.info(f"Hotkey triggered for language: {hotkey_config.get('target_language_code')} (Mode: {hotkey_config.get('mode')})")
@@ -201,77 +277,84 @@ class DirectTransApp:
 
     def _process_translation(self, hotkey_config: dict):
         """Main translation processing logic."""
-        mode = hotkey_config['mode']
-        target_lang_code = hotkey_config['target_language_code']
-        target_lang_name = hotkey_config['target_language_name']
-
-        # 1. Get selected text
         try:
-            selected_text, selected_rtf = ClipboardUtil.get_selected_text()
-        except Exception as e:
-            logging.error(f"Failed to get selected text from clipboard: {e}")
-            self._show_error_popup("Không thể truy cập clipboard.", target_lang_name)
-            return
+            mode = hotkey_config['mode']
+            target_lang_code = hotkey_config['target_language_code']
+            target_lang_name = hotkey_config['target_language_name']
 
-        if not selected_text or not selected_text.strip():
-            logging.warning("Selected text is empty or only whitespace.")
-            self._show_error_popup("Không tìm thấy văn bản đang chọn. Vui lòng bôi đen văn bản trước.", target_lang_name)
-            return
+            from ui.i18n import TRANSLATIONS
+            ui_lang = self.config.data.get('ui_language', 'vi')
+            msgs = TRANSLATIONS.get(ui_lang, TRANSLATIONS['en'])
 
-        # 2. If popup mode, show loading popup first
-        popup = None
-        popup_event = threading.Event()
-
-        if mode == 'popup':
-            logging.info("Spawning translation popup window.")
-            def create_popup():
-                nonlocal popup
-                p = PopupWindow(self.root, self.config)
-                p.show(
-                    loading=True, 
-                    target_lang=target_lang_name,
-                    original_rtf=selected_rtf,
-                    target_lang_code=target_lang_code
-                )
-                popup = p
-                popup_event.set()
-
-            self.root.after(0, create_popup)
-            popup_event.wait(timeout=2.0)
-            if popup is None:
-                logging.warning("Popup was not created in time (2s timeout). Translation result dropped.")
+            # 1. Get selected text
+            try:
+                selected_text, selected_rtf = ClipboardUtil.get_selected_text()
+            except Exception as e:
+                logging.error(f"Failed to get selected text from clipboard: {e}")
+                self._show_error_popup(msgs.get('err_clipboard_msg', 'Không thể lấy văn bản từ clipboard.'), target_lang_name)
                 return
 
-        # 3. Translate
-        try:
-            logging.info(f"Starting translation process to {target_lang_code}...")
-            translated = self.translator.translate(selected_text, target_lang_code)
-            logging.info("Translation process completed successfully.")
-        except Exception as e:
-            err_msg = str(e)
-            logging.error(f"Translation failed: {err_msg}")
-            if popup:
-                self.root.after(0, lambda msg=err_msg: popup.show_error(msg))
-            else:
-                self._show_error_popup(f"Dịch thất bại: {err_msg}", target_lang_name)
-            return
+            if not selected_text or not selected_text.strip():
+                logging.warning("Selected text is empty or only whitespace.")
+                self._show_error_popup(msgs.get('err_clipboard_msg', 'Không thể lấy văn bản từ clipboard.'), target_lang_name)
+                return
 
-        # 4. Output result
-        if mode == 'popup' and popup:
-            self.root.after(0, lambda: popup.update_text(translated))
-        elif mode == 'replace':
-            try:
-                ClipboardUtil.replace_selected_text(translated, selected_rtf, target_lang_code)
-            except Exception:
-                def show_fallback():
+            # 2. If popup mode, show loading popup first
+            popup = None
+            popup_event = threading.Event()
+
+            if mode == MODE_POPUP:
+                logging.info("Spawning translation popup window.")
+                def create_popup():
+                    nonlocal popup
                     p = PopupWindow(self.root, self.config)
                     p.show(
-                        translated_text=translated, 
+                        loading=True, 
                         target_lang=target_lang_name,
                         original_rtf=selected_rtf,
                         target_lang_code=target_lang_code
                     )
-                self.root.after(0, show_fallback)
+                    popup = p
+                    popup_event.set()
+
+                self.root.after(0, create_popup)
+                popup_event.wait(timeout=2.0)
+                if popup is None:
+                    logging.warning("Popup was not created in time (2s timeout). Translation result dropped.")
+                    return
+
+            # 3. Translate
+            try:
+                logging.info(f"Starting translation process to {target_lang_code}...")
+                translated = self.translator.translate(selected_text, target_lang_code)
+                logging.info("Translation process completed successfully.")
+            except Exception as e:
+                err_msg = str(e)
+                logging.error(f"Translation failed: {err_msg}")
+                if popup:
+                    popup.root.after(0, lambda msg=err_msg: popup.show_error(msgs.get('err_trans_title', 'Lỗi dịch: {}').format(msg)))
+                else:
+                    self._show_error_popup(msgs.get('err_trans_title', 'Lỗi dịch: {}').format(err_msg), target_lang_name)
+                return
+
+            # 4. Output result
+            if mode == MODE_POPUP and popup:
+                self.root.after(0, lambda: popup.update_text(translated))
+            elif mode == MODE_REPLACE:
+                try:
+                    ClipboardUtil.replace_selected_text(translated, selected_rtf, target_lang_code)
+                except Exception:
+                    def show_fallback():
+                        p = PopupWindow(self.root, self.config)
+                        p.show(
+                            translated_text=translated, 
+                            target_lang=target_lang_name,
+                            original_rtf=selected_rtf,
+                            target_lang_code=target_lang_code
+                        )
+                    self.root.after(0, show_fallback)
+        finally:
+            self._processing_lock.release()
 
     def _show_settings(self):
         """Open settings window."""
@@ -292,6 +375,35 @@ class DirectTransApp:
         )
         self.root.after(0, self.settings_window.show)
 
+    def _heal_auto_start_path(self):
+        """If auto-start is enabled, update registry to point to the current exe.
+        Ensures upgrading between versions keeps startup working.
+        """
+        if not getattr(sys, 'frozen', False):
+            return
+        if not self.config.is_auto_start():
+            return
+        try:
+            import winreg
+            key = winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                0, winreg.KEY_READ
+            )
+            current_val, _ = winreg.QueryValueEx(key, "DirectTrans")
+            winreg.CloseKey(key)
+
+            expected_path = sys.executable
+            registered_path = current_val.strip('"')
+            if registered_path != expected_path:
+                logging.info(f"Auto-start path outdated ({current_val}), updating to current exe.")
+                self.config.set_auto_start(True)
+        except FileNotFoundError:
+            logging.info("Auto-start registry entry missing, re-creating.")
+            self.config.set_auto_start(True)
+        except Exception as e:
+            logging.warning(f"Failed to heal auto-start path: {e}")
+
     def _on_settings_saved(self):
         """Callback after settings are saved."""
         if self.hotkey_manager:
@@ -307,7 +419,12 @@ class DirectTransApp:
                 self.hotkey_manager.unregister_all()
 
     def _quit(self):
-        """Clean shutdown."""
+        """
+        Quit the application. 
+        Note: os._exit(0) is used to forcefully terminate all threads, 
+        including the Windows message loop in HotkeyManager and systray loop,
+        preventing the app from hanging in the background.
+        """
         logging.info("=== DirectTrans Shutting Down ===")
         if self.hotkey_manager:
             self.hotkey_manager.stop()

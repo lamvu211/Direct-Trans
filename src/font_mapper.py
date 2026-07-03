@@ -2,6 +2,7 @@
 font_mapper.py - Maps target language to the best available font on Windows.
 """
 
+import threading
 import winreg
 
 
@@ -49,46 +50,59 @@ class FontMapper:
 
     DEFAULT_FONTS = ['Segoe UI', 'Arial', 'Times New Roman']
 
-    # Cache for font existence checks to avoid repeated registry lookups
-    _font_cache = {}
+    _lang_cache = {}
+    _installed_fonts = None
+    _lock = threading.Lock()
 
     @staticmethod
     def get_font(lang_code: str) -> str:
         """Return the best available font for the given language code."""
+        if lang_code in FontMapper._lang_cache:
+            return FontMapper._lang_cache[lang_code]
+
         candidates = FontMapper.FONT_MAP.get(lang_code, FontMapper.DEFAULT_FONTS)
 
         for font in candidates:
             if FontMapper._font_exists(font):
+                FontMapper._lang_cache[lang_code] = font
                 return font
 
+        FontMapper._lang_cache[lang_code] = 'Arial'
         return 'Arial'  # Ultimate fallback, always available on Windows
 
     @staticmethod
     def _font_exists(font_name: str) -> bool:
         """Check if a font is installed on Windows via registry."""
-        if font_name in FontMapper._font_cache:
-            return FontMapper._font_cache[font_name]
+        if FontMapper._installed_fonts is None:
+            with FontMapper._lock:
+                # Double-check after acquiring lock
+                if FontMapper._installed_fonts is None:
+                    fonts = []
+                    for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+                        try:
+                            key = winreg.OpenKey(
+                                hive,
+                                r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
+                            )
+                            try:
+                                i = 0
+                                while True:
+                                    try:
+                                        name, _, _ = winreg.EnumValue(key, i)
+                                        fonts.append(name.lower())
+                                        i += 1
+                                    except OSError:
+                                        break
+                            finally:
+                                winreg.CloseKey(key)
+                        except Exception:
+                            pass
+                    FontMapper._installed_fonts = fonts
 
-        try:
-            key = winreg.OpenKey(
-                winreg.HKEY_LOCAL_MACHINE,
-                r"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Fonts"
-            )
-            try:
-                i = 0
-                while True:
-                    try:
-                        name, _, _ = winreg.EnumValue(key, i)
-                        if font_name.lower() in name.lower():
-                            FontMapper._font_cache[font_name] = True
-                            return True
-                        i += 1
-                    except OSError:
-                        break
-            finally:
-                winreg.CloseKey(key)
-        except Exception:
-            pass
-
-        FontMapper._font_cache[font_name] = False
+        font_name_lower = font_name.lower()
+        for installed_font in FontMapper._installed_fonts:
+            if font_name_lower in installed_font:
+                return True
+                
         return False
+

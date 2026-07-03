@@ -24,14 +24,13 @@ class ClipboardUtil:
         Returns: (plain_text, rtf_data_or_None)
         """
         # Backup current clipboard
-        backup_text, backup_rtf = ClipboardUtil._read_clipboard()
+        backup_dict = ClipboardUtil._read_clipboard()
 
         # Đặt một giá trị token đặc biệt để kiểm tra xem clipboard có được cập nhật bởi ctrl+c không
         sentinel = f"__DIRECT_TRANS_SENTINEL_{time.time()}__"
-        ClipboardUtil._write_clipboard(sentinel, None)
+        ClipboardUtil._write_clipboard({win32con.CF_UNICODETEXT: sentinel})
 
-        import win32api
-        import win32con
+        # Lazy import to avoid PyInstaller bundle issues (removed local imports to fix UnboundLocalError)
         modifiers = [
             (0xA0, 0), # VK_LSHIFT
             (0xA1, 0), # VK_RSHIFT
@@ -76,14 +75,16 @@ class ClipboardUtil:
         selected_rtf = None
         for _ in range(10):
             time.sleep(0.05)
-            txt, rtf = ClipboardUtil._read_clipboard()
-            if txt != sentinel:
-                selected_text = txt
-                selected_rtf = rtf
+            current_dict = ClipboardUtil._read_clipboard()
+            txt = current_dict.get(win32con.CF_UNICODETEXT, "")
+            # Need to normalize txt if it exists
+            if isinstance(txt, str) and txt != sentinel:
+                selected_text = txt.replace('\r\n', '\n').replace('\x0b', '\n')
+                selected_rtf = current_dict.get(CF_RTF)
                 break
 
         # Khôi phục lại clipboard gốc
-        ClipboardUtil._write_clipboard(backup_text, backup_rtf)
+        ClipboardUtil._write_clipboard(backup_dict)
 
         # Chuẩn hóa nếu không copy được gì (vẫn là sentinel)
         if selected_text == sentinel:
@@ -100,19 +101,21 @@ class ClipboardUtil:
         Replace the selected text with translated text, preserving formatting.
         """
         # Backup current clipboard
-        backup_text, backup_rtf = ClipboardUtil._read_clipboard()
+        backup_dict = ClipboardUtil._read_clipboard()
 
+        write_dict = {}
         if original_rtf:
             new_rtf = RTFManipulator.replace_text_preserve_format(
                 original_rtf, translated_text, target_lang
             )
-            ClipboardUtil._write_clipboard(translated_text, new_rtf)
-        else:
-            ClipboardUtil._write_clipboard(translated_text, None)
+            write_dict[CF_RTF] = new_rtf
+            
+        formatted_text = translated_text.replace('\n', '\r\n').replace('\r\r\n', '\r\n')
+        write_dict[win32con.CF_UNICODETEXT] = formatted_text
+        ClipboardUtil._write_clipboard(write_dict)
 
         # We only need the modifiers list to force-release them below.
-        import win32api
-        import win32con
+        # Lazy import to avoid PyInstaller bundle issues (removed local imports to fix UnboundLocalError)
         modifiers = [
             (0xA0, 0), # VK_LSHIFT
             (0xA1, 0), # VK_RSHIFT
@@ -146,19 +149,20 @@ class ClipboardUtil:
         win32api.keybd_event(VK_CONTROL, SC_CONTROL, win32con.KEYEVENTF_KEYUP, 0)  # Ctrl up
         
         # We intentionally do NOT restore modifiers here via software KEYDOWN.
+        # Data Loss Risk: 0.2s delay is to ensure the target app processes the Ctrl+V
+        # before we restore the old clipboard content. If the app is slow, it might
+        # paste the restored original content instead of the translated text.
         time.sleep(0.2)
 
         # Restore clipboard after paste
-        ClipboardUtil._write_clipboard(backup_text, backup_rtf)
+        ClipboardUtil._write_clipboard(backup_dict)
         logging.info(f"Clipboard replaced and restored (target lang: {target_lang}).")
 
     @staticmethod
-    def _read_clipboard() -> tuple:
-        """Read clipboard, return (plain_text, rtf_bytes_or_None)."""
-        text = ""
-        rtf = None
+    def _read_clipboard() -> dict:
+        """Read all clipboard formats into a dictionary."""
+        data_dict = {}
         opened = False
-        import time
         # Retry up to 5 times (total 50ms) to open clipboard if locked
         for i in range(5):
             try:
@@ -168,14 +172,20 @@ class ClipboardUtil:
             except Exception as e:
                 if i == 4:
                     logging.warning(f"Clipboard read failed (may be locked by another app): {e}")
-                    return "", None
+                    return {}
                 time.sleep(0.01)
         
         try:
-            if win32clipboard.IsClipboardFormatAvailable(win32con.CF_UNICODETEXT):
-                text = win32clipboard.GetClipboardData(win32con.CF_UNICODETEXT)
-            if win32clipboard.IsClipboardFormatAvailable(CF_RTF):
-                rtf = win32clipboard.GetClipboardData(CF_RTF)
+            fmt = 0
+            while True:
+                fmt = win32clipboard.EnumClipboardFormats(fmt)
+                if fmt == 0:
+                    break
+                try:
+                    data = win32clipboard.GetClipboardData(fmt)
+                    data_dict[fmt] = data
+                except Exception:
+                    pass
         except Exception as e:
             logging.warning(f"Error getting clipboard data: {e}")
         finally:
@@ -185,17 +195,12 @@ class ClipboardUtil:
                 except Exception:
                     pass
             
-        if text:
-            # Normalize various line break characters to \n for consistent translation
-            text = text.replace('\r\n', '\n').replace('\x0b', '\n')
-            
-        return text, rtf
+        return data_dict
 
     @staticmethod
-    def _write_clipboard(text: str, rtf: bytes | None):
-        """Write both plain text and RTF (if available) to clipboard."""
+    def _write_clipboard(data_dict: dict):
+        """Write a dictionary of clipboard formats and data."""
         opened = False
-        import time
         # Retry up to 5 times (total 50ms) to open clipboard if locked
         for i in range(5):
             try:
@@ -210,12 +215,11 @@ class ClipboardUtil:
         
         try:
             win32clipboard.EmptyClipboard()
-            if text:
-                # Ensure standard Windows newlines for plain text
-                text = text.replace('\n', '\r\n').replace('\r\r\n', '\r\n')
-                win32clipboard.SetClipboardData(win32con.CF_UNICODETEXT, text)
-            if rtf:
-                win32clipboard.SetClipboardData(CF_RTF, rtf)
+            for fmt, data in data_dict.items():
+                try:
+                    win32clipboard.SetClipboardData(fmt, data)
+                except Exception:
+                    pass
         except Exception as e:
             logging.warning(f"Error setting clipboard data: {e}")
         finally:
@@ -289,7 +293,7 @@ class RTFManipulator:
                 if token_value == '{':
                     group_depth += 1
                 elif token_value == '}':
-                    if skip_depth != -1 and group_depth == skip_depth:
+                    if skip_depth != -1 and group_depth <= skip_depth:
                         skip_depth = -1
                     group_depth -= 1
                 else:
@@ -367,15 +371,10 @@ class RTFManipulator:
                             new_p_tokens.append(('control', f'\\f{new_font_idx} '))
                             applied_font = True
                         
-                        if text_token_idx == text_tokens_in_p:
+                        if text_token_idx == 1:
                             new_p_tokens.append(('text', RTFManipulator._escape_rtf_text(trans_remaining)))
-                            trans_remaining = ''
                         else:
-                            ratio = len(t_val) / max(len(orig_text_full), 1)
-                            chars_to_take = max(1, int(len(trans_line) * ratio))
-                            chunk = trans_remaining[:chars_to_take]
-                            trans_remaining = trans_remaining[chars_to_take:]
-                            new_p_tokens.append(('text', RTFManipulator._escape_rtf_text(chunk)))
+                            new_p_tokens.append(('text', ''))
                     elif t_type == 'text':
                         # Whitespace-only token, preserve as is
                         new_p_tokens.append((t_type, t_val))
@@ -496,6 +495,8 @@ class RTFManipulator:
                 result.append('\\par ')
             elif ch == '\r':
                 continue
+            elif ch == '\t':
+                result.append('\\tab ')
             elif ord(ch) > 127:
                 # Unicode escape: \uN?
                 result.append(f'\\u{ord(ch)}?')

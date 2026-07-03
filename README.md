@@ -1,6 +1,8 @@
 # Direct-Trans
 
-**Direct-Trans** is a lightweight, high-performance, and non-intrusive AI-powered translation utility built specifically for Windows. Operating quietly in the system tray, it registers global system hotkeys to capture selected text from any active application, translate it via state-of-the-art AI backends, and either display the output in a elegant popup window or directly replace the selected text while preserving the original layout and formatting (RTF).
+**Direct-Trans** is a lightweight, high-performance, and non-intrusive AI-powered translation utility built specifically for Windows. Operating quietly in the system tray, it registers global system hotkeys to capture selected text from any active application, translate it via state-of-the-art AI backends, and either display the output in an elegant popup window or directly replace the selected text while preserving the original layout and formatting (RTF).
+
+**Current version:** v1.0.6
 
 ---
 
@@ -26,6 +28,7 @@
 Direct-Trans is organized into decoupled modules under the `src/` directory:
 
 - `main.py`: Entry point. Enforces the single-instance mutex, initializes the Tkinter main loop, coordinates background threads, and handles startup configurations.
+- `constants.py`: Shared business constants (translation modes, provider names, fallback order).
 - `tray.py`: Manages the system tray icon and menu using `pystray`. Runs on a background thread to prevent GUI lockups.
 - `hotkey_manager.py`: Implements native Windows hotkey binding using ctypes to hook into `user32.dll` message loops.
 - `clipboard_util.py`: Handles clipboard backup, sentinel-based clipboard verification, and safe RTF-preserved pasting.
@@ -33,6 +36,7 @@ Direct-Trans is organized into decoupled modules under the `src/` directory:
 - `font_mapper.py`: Resolves and validates installed Windows fonts (via registry checking) matching the target language requirements.
 - `popup_window.py`: Custom Tkinter dialog styling the translation popup in Claude's signature aesthetic.
 - `settings_window.py`: Multi-tab interface for managing API credentials, custom hotkeys, auto-start, and interface languages.
+- `ui/`: Modular settings UI components (`api_config_tab.py`, `hotkey_config_tab.py`, `i18n.py`, `constants.py` for UI colors).
 
 ---
 
@@ -54,7 +58,7 @@ Direct-Trans is organized into decoupled modules under the `src/` directory:
    ```bash
    pip install -r requirements.txt
    ```
-   *Dependencies include: `pystray`, `Pillow`, `keyboard` (fallback utilities), `pywin32`, and `requests`.*
+   *Dependencies include: `pystray`, `Pillow`, `keyboard` (hotkey capture in settings UI), `pywin32`, and `requests`.*
 
 3. **Run the application:**
    - To run with console (for debugging):
@@ -67,7 +71,9 @@ Direct-Trans is organized into decoupled modules under the `src/` directory:
      ```
 
 4. **Configuration:**
-   On first run, the Settings Window will automatically open. Paste your API keys (e.g., Gemini API key) to get started. You can re-open the Settings Window anytime by double-clicking the system tray icon or right-clicking and selecting **Cài đặt / Settings**.
+   On **first run** or when your primary provider has no API key configured, the Settings window opens automatically so you can paste your API keys (e.g., Gemini API key). If you use **Google Free** as your primary provider, settings will not open on startup. You can always re-open Settings by double-clicking the system tray icon or right-clicking and selecting **Cài đặt / Settings**.
+
+   Config is stored at `%APPDATA%\DirectTrans\config.json` in dev mode, or next to the executable when running the built `.exe`.
 
 ---
 
@@ -78,6 +84,16 @@ On initial run, Direct-Trans configures two default hotkeys:
 - `Ctrl + Shift + E`: Translates selected text to **English** and displays it in a popup.
 
 You can modify these, add new target languages (e.g., Japanese, Korean, Chinese), or change their mode to `replace` inside the Settings Window.
+
+---
+
+## Running Tests
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+Tests cover translation providers, fallback chain logic, hotkey parsing, config encryption, and RTF manipulation.
 
 ---
 
@@ -92,7 +108,7 @@ To build the executable:
    ```cmd
    .\build.bat
    ```
-2. The compiled binary will be generated under the `dist/` directory as `dist\DirectTrans_v1.0.3.exe` (or the version specified in the spec file).
+2. The compiled binary will be generated under the `dist/` directory as `dist\DirectTrans_v1.0.6.exe` (or the version specified in the spec file).
 
 ---
 
@@ -101,20 +117,28 @@ To build the executable:
 ```text
 Direct-Trans/
 ├── src/
-│   ├── assets/            # Graphical resources and icons
-│   ├── main.py            # App orchestrator & single-instance logic
-│   ├── tray.py            # System tray integration
-│   ├── hotkey_manager.py  # Windows API global hotkeys via ctypes
-│   ├── clipboard_util.py  # Clipboard helper & RTF parser
-│   ├── translator.py      # AI translation endpoints & fallback manager
-│   ├── font_mapper.py     # System font lookup helper
-│   ├── popup_window.py    # Claude-inspired popup window UI
-│   └── settings_window.py # Tkinter settings window UI
-├── DirectTrans.spec       # PyInstaller build spec
-├── build.bat              # Autocompile script
-├── requirements.txt       # Python dependency list
-├── CHANGELOG.md           # Release history log
-└── README.md              # Project documentation
+│   ├── assets/              # Graphical resources and icons
+│   ├── ui/                  # Settings UI modules
+│   │   ├── api_config_tab.py
+│   │   ├── hotkey_config_tab.py
+│   │   ├── constants.py     # UI color constants
+│   │   └── i18n.py          # Translations & language lists
+│   ├── main.py              # App orchestrator & single-instance logic
+│   ├── constants.py         # Business constants (modes, providers)
+│   ├── tray.py              # System tray integration
+│   ├── hotkey_manager.py    # Windows API global hotkeys via ctypes
+│   ├── clipboard_util.py    # Clipboard helper & RTF parser
+│   ├── translator.py        # AI translation endpoints & fallback manager
+│   ├── font_mapper.py       # System font lookup helper
+│   ├── popup_window.py      # Translation popup window UI
+│   └── settings_window.py   # Tkinter settings window shell
+├── tests/                   # Unit tests
+├── .github/workflows/       # CI (unittest on push/PR)
+├── DirectTrans.spec         # PyInstaller build spec
+├── build.bat                # Autocompile script
+├── requirements.txt         # Python dependency list
+├── CHANGELOG.md             # Release history log
+└── README.md                # Project documentation
 ```
 
 ---

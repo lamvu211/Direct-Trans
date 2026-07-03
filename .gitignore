@@ -31,7 +31,3 @@ Presentation1.pptx
 
 # User config (use config.example.json as template)
 config.json
-
-# Agents
-.agent/
-.agents/
