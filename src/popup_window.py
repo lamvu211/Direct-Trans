@@ -87,11 +87,13 @@ class PopupWindow:
 
     def show(self, translated_text: str = None, loading: bool = False,
              source_lang: str = "", target_lang: str = "",
-             original_rtf: bytes = None, target_lang_code: str = None):
+             original_rtf: bytes = None, target_lang_code: str = None,
+             original_hwnd: int = None):
         """Show the popup. If loading=True, shows spinner. Otherwise shows translated text."""
         self.original_rtf = original_rtf
         self.target_lang_code = target_lang_code
         self.translated_text = translated_text
+        self.original_hwnd = original_hwnd
 
         # Close any existing popups to ensure only 1 window is shown at a time
         for p in list(PopupWindow.open_popups):
@@ -100,7 +102,7 @@ class PopupWindow:
 
         self.window = tk.Toplevel(self.root)
         self.window.overrideredirect(False)
-        self.window.attributes('-topmost', True)
+        self.window.attributes('-topmost', False)
         self.window.minsize(400, 200)
         self.window.configure(bg=self.BASE)
 
@@ -310,12 +312,14 @@ class PopupWindow:
         import time
         from clipboard_util import ClipboardUtil
 
-        # Capture the foreground window before withdrawing popup
         import ctypes
-        try:
-            target_hwnd = ctypes.windll.user32.GetForegroundWindow()
-        except Exception:
-            target_hwnd = None
+        if hasattr(self, 'original_hwnd') and self.original_hwnd:
+            target_hwnd = self.original_hwnd
+        else:
+            try:
+                target_hwnd = ctypes.windll.user32.GetForegroundWindow()
+            except Exception:
+                target_hwnd = None
 
         # Hide window immediately so focus returns to the original active application
         try:

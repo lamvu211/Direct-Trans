@@ -286,6 +286,12 @@ class DirectTransApp:
             ui_lang = self.config.data.get('ui_language', 'vi')
             msgs = TRANSLATIONS.get(ui_lang, TRANSLATIONS['en'])
 
+            import ctypes
+            try:
+                original_hwnd = ctypes.windll.user32.GetForegroundWindow()
+            except Exception:
+                original_hwnd = None
+
             # 1. Get selected text
             try:
                 selected_text, selected_rtf = ClipboardUtil.get_selected_text()
@@ -312,7 +318,8 @@ class DirectTransApp:
                         loading=True, 
                         target_lang=target_lang_name,
                         original_rtf=selected_rtf,
-                        target_lang_code=target_lang_code
+                        target_lang_code=target_lang_code,
+                        original_hwnd=original_hwnd
                     )
                     popup = p
                     popup_event.set()
@@ -350,7 +357,8 @@ class DirectTransApp:
                             translated_text=translated, 
                             target_lang=target_lang_name,
                             original_rtf=selected_rtf,
-                            target_lang_code=target_lang_code
+                            target_lang_code=target_lang_code,
+                            original_hwnd=original_hwnd
                         )
                     self.root.after(0, show_fallback)
         finally:

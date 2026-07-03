@@ -1,6 +1,8 @@
 # Changelog
 
 ## v1.0.6
+- **Fixed Replace button not pasting text**: The `Replace` button in the popup window previously failed because it captured the popup's own window handle when clicked, rather than the target application. It now correctly captures and restores focus to the original active window before simulating `Ctrl+V`.
+- **Disabled popup always-on-top**: The translation popup no longer forces itself to stay on top (`-topmost`) of other windows, improving UX when switching to other applications.
 - **Fixed version upgrade not replacing old process**: `kill_old_processes()` used exact name `DirectTrans.exe` which didn't match versioned executables like `DirectTrans_v1.0.4.exe`. Now matches any process starting with "DirectTrans".
 - **Fixed auto-start registry not updating on upgrade**: When upgrading from v1.0.4 to v1.0.5+, the Windows startup registry entry still pointed to the old exe. Added `_heal_auto_start_path()` that automatically detects and updates the registry path on startup.
 - **Added fallback chain tests**: Comprehensive unit tests for `TranslationManager` with mock backends, verifying provider order, skip-on-missing-key behavior, fallback-disabled mode, and `<think>` tag stripping.
