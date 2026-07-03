@@ -7,23 +7,11 @@ __pycache__/
 *.pyc
 *.pyo
 *.egg-info/
+.pytest_cache/
 
 # Runtime
 *.log
-
-# Debug artifacts
-# Build
-build/
-dist/
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-
-# Runtime
-*.log
+directtrans.signal
 
 # Debug artifacts
 ppt_clipboard.rtf
@@ -31,3 +19,11 @@ Presentation1.pptx
 
 # User config (use config.example.json as template)
 config.json
+
+# Project-local AI agent config
+.agents
+.cursor/
+
+# Internal notes (not part of the product)
+hand-off.md
+issue.md
