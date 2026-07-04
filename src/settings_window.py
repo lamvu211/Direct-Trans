@@ -41,7 +41,7 @@ class SettingsWindow:
 
     def show(self):
         self.window = tk.Toplevel(self.root)
-        self.window.title("DirectTrans Settings v1.0.6")
+        self.window.title("DirectTrans Settings v1.0.8")
         self.window.geometry("580x630")
         self.window.resizable(True, True)
         self.window.minsize(580, 500)

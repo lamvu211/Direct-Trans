@@ -2,7 +2,7 @@
 
 **Direct-Trans** is a lightweight, high-performance, and non-intrusive AI-powered translation utility built specifically for Windows. Operating quietly in the system tray, it registers global system hotkeys to capture selected text from any active application, translate it via state-of-the-art AI backends, and either display the output in an elegant popup window or directly replace the selected text while preserving the original layout and formatting (RTF).
 
-**Current version:** v1.0.6
+**Current version:** v1.0.8
 
 ---
 
@@ -108,7 +108,7 @@ To build the executable:
    ```cmd
    .\build.bat
    ```
-2. The compiled binary will be generated under the `dist/` directory as `dist\DirectTrans_v1.0.6.exe` (or the version specified in the spec file).
+2. The compiled binary will be generated under the `dist/` directory as `dist\DirectTrans_v1.0.8.exe` (or the version specified in the spec file).
 
 ---
 

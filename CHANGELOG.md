@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.8
+- **Fixed RTF bullet point translation**: Added `\pntext` and `\listtext` to the ignored groups list in RTF processing. This prevents the parser from accidentally overwriting hidden bullet point characters with translated text, fixing the "lost text" and font corruption issues when translating bulleted or numbered lists in Word and PowerPoint.
+
+## v1.0.7
+- **Fixed RTF parsing for Microsoft Office**: Replaced regex with a brace-counting algorithm for `\fonttbl` extraction in RTF processing. This resolves an issue where pasting translated text back into Word or PowerPoint would cause fonts to unexpectedly increase in size or fail to paste entirely due to nested brace structures in Office's RTF format.
+
 ## v1.0.6
 - **Fixed Replace button not pasting text**: The `Replace` button in the popup window previously failed because it captured the popup's own window handle when clicked, rather than the target application. It now correctly captures and restores focus to the original active window before simulating `Ctrl+V`.
 - **Disabled popup always-on-top**: The translation popup no longer forces itself to stay on top (`-topmost`) of other windows, improving UX when switching to other applications.

@@ -22,6 +22,14 @@ MULTI_PARAGRAPH_RTF = (
     r'}'
 )
 
+NESTED_BRACE_RTF = (
+    r'{\rtf1\ansi\deff0'
+    r'{\fonttbl{\f0{\*\panose 02020603050405020304}Times New Roman;}}'
+    r'\f0 Nested braces test'
+    r'}'
+)
+
+
 
 class TestRTFTokenizer(unittest.TestCase):
     def test_tokenize_plain_text(self):
@@ -92,6 +100,17 @@ class TestRTFReplace(unittest.TestCase):
         self.assertIn('Translated', rtf)
         # Styled control words should remain
         self.assertIn('\\b', rtf)
+
+    @patch('font_mapper.FontMapper.get_font', return_value='Arial')
+    def test_replace_with_nested_fonttbl(self, _mock_font):
+        result = RTFManipulator.replace_text_preserve_format(
+            NESTED_BRACE_RTF.encode('utf-8'), 'Success', 'en'
+        )
+        rtf = result.decode('utf-8')
+        self.assertIn('Success', rtf)
+        # Verify that the nested panose group is preserved
+        self.assertIn('\\*\\panose', rtf)
+        self.assertIn('Arial', rtf)
 
     def test_create_simple_rtf_fallback(self):
         rtf = RTFManipulator._create_simple_rtf('Hello\tworld', 'Arial')

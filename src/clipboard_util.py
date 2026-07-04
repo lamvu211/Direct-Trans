@@ -257,12 +257,27 @@ class RTFManipulator:
         """
         Replace text content in RTF while preserving control words and paragraph structure.
         """
-        # Find the font table
-        fonttbl_match = re.search(r'\{\\fonttbl\s*((?:\{[^}]*\}[\s]*)*)\}', rtf_str)
-        if not fonttbl_match:
+        # Find the start of the font table
+        fonttbl_start = rtf_str.find(r'{\fonttbl')
+        if fonttbl_start == -1:
             raise ValueError("No font table found in RTF")
 
-        fonttbl_content = fonttbl_match.group(0)
+        # Use brace counting to find the end of the font table
+        brace_count = 0
+        fonttbl_end = -1
+        for i in range(fonttbl_start, len(rtf_str)):
+            if rtf_str[i] == '{':
+                brace_count += 1
+            elif rtf_str[i] == '}':
+                brace_count -= 1
+                if brace_count == 0:
+                    fonttbl_end = i + 1
+                    break
+
+        if fonttbl_end == -1:
+            raise ValueError("Malformed font table in RTF")
+
+        fonttbl_content = rtf_str[fonttbl_start:fonttbl_end]
 
         # Find the highest font index
         font_indices = re.findall(r'\\f(\d+)', fonttbl_content)
@@ -274,9 +289,9 @@ class RTFManipulator:
         new_fonttbl = fonttbl_content[:-1] + new_font_entry + '}'
 
         # Replace font table safely without breaking body_start
-        body_start = fonttbl_match.end()
+        body_start = fonttbl_end
         body = rtf_str[body_start:]
-        prefix = rtf_str[:fonttbl_match.start()] + new_fonttbl
+        prefix = rtf_str[:fonttbl_start] + new_fonttbl
 
         # Tokenize the body
         tokens = RTFManipulator._tokenize_rtf(body)
@@ -298,7 +313,7 @@ class RTFManipulator:
                     group_depth -= 1
                 else:
                     val = token_value.strip().lower()
-                    if val.startswith('\\colortbl') or val.startswith('\\stylesheet') or val.startswith('\\info') or val.startswith('\\*'):
+                    if val.startswith('\\colortbl') or val.startswith('\\stylesheet') or val.startswith('\\info') or val.startswith('\\*') or val.startswith('\\pntext') or val.startswith('\\listtext'):
                         if skip_depth == -1:
                             skip_depth = group_depth
             
