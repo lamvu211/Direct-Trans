@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.0.9
+- **Fixed prompt injection in translation**: Wrapped text inside `<text>` tags and strictly instructed the LLM to ignore inline commands (e.g., "(영문)") to prevent the model from answering in the wrong language.
+- **Improved LLM target language recognition**: Passed the full language name (e.g., "Tiếng Việt") instead of the language code ("vi") to LLM providers (Gemini, Groq, Mistral) to improve accuracy, while keeping language code for Google Translate API.
+
 ## v1.0.8
 - **Fixed RTF bullet point translation**: Added `\pntext` and `\listtext` to the ignored groups list in RTF processing. This prevents the parser from accidentally overwriting hidden bullet point characters with translated text, fixing the "lost text" and font corruption issues when translating bulleted or numbered lists in Word and PowerPoint.
 

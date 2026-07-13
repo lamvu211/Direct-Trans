@@ -332,8 +332,8 @@ class DirectTransApp:
 
             # 3. Translate
             try:
-                logging.info(f"Starting translation process to {target_lang_code}...")
-                translated = self.translator.translate(selected_text, target_lang_code)
+                logging.info(f"Starting translation process to {target_lang_name} ({target_lang_code})...")
+                translated = self.translator.translate(selected_text, target_lang_name, target_lang_code)
                 logging.info("Translation process completed successfully.")
             except Exception as e:
                 err_msg = str(e)
