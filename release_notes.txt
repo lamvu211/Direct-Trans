@@ -1,0 +1,1 @@
+- **Fixed API key test failure**: The "Test" button in the Settings window incorrectly reported a failure due to a missing `target_lang_code` argument introduced in v1.0.9. This bug only affected the test functionality and did not impact actual translation.

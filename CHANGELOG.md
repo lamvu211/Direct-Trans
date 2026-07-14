@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.0.10
+- **Fixed API key test failure**: The "Test" button in the Settings window incorrectly reported a failure due to a missing `target_lang_code` argument introduced in v1.0.9. This bug only affected the test functionality and did not impact actual translation.
+
 ## v1.0.9
 - **Added automatic update notification**: On startup, the app checks GitHub Releases for new versions in the background. If a newer version is found, a dialog offers three options: open the download page, snooze for 7 days, or skip that version. User preferences are persisted in `config.json`.
 - **Added `APP_VERSION` constant**: Centralized version tracking in `constants.py` for update comparison and future use.
