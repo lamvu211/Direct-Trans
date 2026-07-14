@@ -1,6 +1,8 @@
 # Changelog
 
 ## v1.0.9
+- **Added automatic update notification**: On startup, the app checks GitHub Releases for new versions in the background. If a newer version is found, a dialog offers three options: open the download page, snooze for 7 days, or skip that version. User preferences are persisted in `config.json`.
+- **Added `APP_VERSION` constant**: Centralized version tracking in `constants.py` for update comparison and future use.
 - **Fixed prompt injection in translation**: Wrapped text inside `<text>` tags and strictly instructed the LLM to ignore hidden inline instructions to prevent the model from translating into an unexpected language.
 - **Improved LLM target language recognition**: Passed the full language name instead of the short language code to LLM providers (Gemini, Groq, Mistral) to improve accuracy, while keeping the language code format for the Google Translate API.
 

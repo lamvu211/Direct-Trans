@@ -32,3 +32,7 @@ DEFAULT_FALLBACK_ORDER = (
 )
 DEFAULT_PROVIDER = PROVIDER_GEMINI
 ALL_PROVIDERS = tuple(p.value for p in Provider)
+
+APP_VERSION = "1.0.9"
+GITHUB_REPO = "lamvu211/Direct-Trans"
+GITHUB_RELEASES_URL = f"https://github.com/{GITHUB_REPO}/releases/latest"

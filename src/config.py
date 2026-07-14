@@ -35,6 +35,8 @@ class Config:
         "groq_model": "openai/gpt-oss-120b",
         "mistral_model": "mistral-large-latest",
         "auto_start": False,
+        "skipped_versions": [],
+        "snooze_update_until": 0,
         "hotkeys": [
             {
                 "id": str(uuid.uuid4()),
@@ -248,3 +250,20 @@ class Config:
             logging.warning("Failed to update auto-start registry: %s", e)
             return False
 
+    # --- Update preferences ---
+    def get_skipped_versions(self) -> list:
+        return self.data.get('skipped_versions', [])
+
+    def skip_version(self, version: str):
+        skipped = self.data.setdefault('skipped_versions', [])
+        if version not in skipped:
+            skipped.append(version)
+            self.save()
+
+    def get_snooze_until(self) -> float:
+        return self.data.get('snooze_update_until', 0)
+
+    def snooze_update(self, days: int = 7):
+        import time
+        self.data['snooze_update_until'] = time.time() + (days * 86400)
+        self.save()

@@ -148,6 +148,7 @@ from translator import TranslationManager
 from clipboard_util import ClipboardUtil
 from popup_window import PopupWindow
 from settings_window import SettingsWindow
+from updater import check_for_updates_in_background
 
 
 class DirectTransApp:
@@ -203,6 +204,9 @@ class DirectTransApp:
         if self.config.needs_setup():
             logging.info("Opening settings window on startup (first run or missing API key).")
             self.root.after(1000, self._show_settings)
+
+        # Check for updates in background (delay 5s to not slow down startup)
+        self.root.after(5000, lambda: check_for_updates_in_background(self.root, self.config))
 
         print("DirectTrans is running. Use system tray icon to access settings.")
         logging.info("DirectTrans initialized and running.")
