@@ -22,8 +22,8 @@ class StubBackend(TranslationBackend):
         self.error = error
         self.calls = []
 
-    def translate(self, text: str, target_lang: str, **kwargs) -> str:
-        self.calls.append({'text': text, 'target_lang': target_lang, 'kwargs': kwargs})
+    def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
+        self.calls.append({'text': text, 'target_lang_name': target_lang_name, 'target_lang_code': target_lang_code, 'kwargs': kwargs})
         if self.error:
             raise self.error
         return self.result
@@ -70,7 +70,7 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_GEMINI: gemini,
             PROVIDER_GROQ: StubBackend(result='should not run'),
         })
-        result = mgr.translate('Hello', 'vi')
+        result = mgr.translate('Hello', 'Vietnamese', 'vi')
         self.assertEqual(result, 'Xin chào')
         self.assertEqual(len(gemini.calls), 1)
 
@@ -87,7 +87,7 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_MISTRAL: StubBackend(result='skip'),
             PROVIDER_GOOGLE_FREE: StubBackend(result='skip'),
         })
-        result = mgr.translate('Hello', 'vi')
+        result = mgr.translate('Hello', 'Vietnamese', 'vi')
         self.assertEqual(result, 'Hello from Groq')
         self.assertEqual(len(gemini.calls), 1)
         self.assertEqual(len(groq.calls), 1)
@@ -100,7 +100,7 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_GEMINI: gemini,
             PROVIDER_GROQ: groq,
         })
-        result = mgr.translate('Hello', 'vi')
+        result = mgr.translate('Hello', 'Vietnamese', 'vi')
         self.assertEqual(result, 'Groq OK')
         self.assertEqual(len(gemini.calls), 0)
         self.assertEqual(len(groq.calls), 1)
@@ -115,7 +115,7 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_GEMINI: StubBackend(result='skip'),
             PROVIDER_GOOGLE_FREE: google,
         })
-        result = mgr.translate('Hello', 'vi')
+        result = mgr.translate('Hello', 'Vietnamese', 'vi')
         self.assertEqual(result, 'Free translate')
         self.assertEqual(len(google.calls), 1)
 
@@ -131,14 +131,14 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_GROQ: groq,
         })
         with self.assertRaises(TranslationError):
-            mgr.translate('Hello', 'vi')
+            mgr.translate('Hello', 'Vietnamese', 'vi')
         self.assertEqual(len(groq.calls), 0)
 
     def test_strips_redacted_thinking_tags(self):
         config = MockConfig(api_keys={PROVIDER_GEMINI: 'key1'})
         gemini = StubBackend(result='<think>reasoning</think>Xin chào')
         mgr = self._manager_with_stubs(config, {PROVIDER_GEMINI: gemini})
-        result = mgr.translate('Hello', 'vi')
+        result = mgr.translate('Hello', 'Vietnamese', 'vi')
         self.assertEqual(result, 'Xin chào')
 
     def test_all_providers_fail_raises(self):
@@ -153,7 +153,7 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_GOOGLE_FREE: StubBackend(error=TranslationError('d')),
         })
         with self.assertRaises(TranslationError) as ctx:
-            mgr.translate('Hello', 'vi')
+            mgr.translate('Hello', 'Vietnamese', 'vi')
         self.assertIn('All translation providers failed', str(ctx.exception))
 
 

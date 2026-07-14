@@ -17,14 +17,14 @@ class TestTranslator(unittest.TestCase):
         mock_post.return_value = mock_resp
         
         t = GeminiTranslator()
-        res = t.translate("Hello", "vi", api_key="test_key", model="gemini-pro")
+        res = t.translate("Hello", "Vietnamese", "vi", api_key="test_key", model="gemini-pro")
         self.assertEqual(res, "Xin chào")
         
         # Test error handling
         mock_resp.raise_for_status.side_effect = Exception("Bad Request")
         from translator import TranslationError
         with self.assertRaises(TranslationError):
-            t.translate("Hello", "vi", api_key="test_key", model="gemini-pro")
+            t.translate("Hello", "Vietnamese", "vi", api_key="test_key", model="gemini-pro")
 
     @patch('translator.requests.post')
     def test_groq_translator(self, mock_post):
@@ -36,7 +36,7 @@ class TestTranslator(unittest.TestCase):
         mock_post.return_value = mock_resp
         
         t = GroqTranslator()
-        res = t.translate("Hello", "vi", api_key="test_key", model="llama")
+        res = t.translate("Hello", "Vietnamese", "vi", api_key="test_key", model="llama")
         self.assertEqual(res, "<think>Thinking...</think>Xin chào")
         
     @patch('translator.requests.post')
@@ -49,7 +49,7 @@ class TestTranslator(unittest.TestCase):
         mock_post.return_value = mock_resp
         
         t = MistralTranslator()
-        res = t.translate("Hello", "vi", api_key="test_key", model="mistral")
+        res = t.translate("Hello", "Vietnamese", "vi", api_key="test_key", model="mistral")
         self.assertEqual(res, "Xin chào")
         
     @patch('translator.requests.get')
@@ -62,7 +62,7 @@ class TestTranslator(unittest.TestCase):
         mock_get.return_value = mock_resp
         
         t = GoogleFreeTranslator()
-        res = t.translate("Hello", "vi")
+        res = t.translate("Hello", "Vietnamese", "vi")
         self.assertEqual(res, "Xin chào")
 
 if __name__ == '__main__':
