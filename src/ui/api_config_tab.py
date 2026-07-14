@@ -297,13 +297,13 @@ class ApiConfigTab:
                 res = None
                 if provider == PROVIDER_GEMINI:
                     t = GeminiTranslator()
-                    res = t.translate("Hi", "vi", api_key=key, model=model)
+                    res = t.translate("Hi", "Vietnamese", "vi", api_key=key, model=model)
                 elif provider == PROVIDER_GROQ:
                     t = GroqTranslator()
-                    res = t.translate("Hi", "vi", api_key=key, model=model)
+                    res = t.translate("Hi", "Vietnamese", "vi", api_key=key, model=model)
                 elif provider == PROVIDER_MISTRAL:
                     t = MistralTranslator()
-                    res = t.translate("Hi", "vi", api_key=key, model=model)
+                    res = t.translate("Hi", "Vietnamese", "vi", api_key=key, model=model)
 
                 if res:
                     self.config.set_api_key(provider, key)
