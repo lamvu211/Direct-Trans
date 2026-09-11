@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.0.11
+- **Enhanced translation system prompt**: Added automatic context detection (academic research, technical standards/guides, business emails, executive reports), native fluency polishing when source and target languages match, respectful honorifics for superiors/clients vs neutral tone for general descriptions, and holistic document purpose alignment.
+
 ## v1.0.10
 - **Fixed API key test failure**: The "Test" button in the Settings window incorrectly reported a failure due to a missing `target_lang_code` argument introduced in v1.0.9. This bug only affected the test functionality and did not impact actual translation.
 
