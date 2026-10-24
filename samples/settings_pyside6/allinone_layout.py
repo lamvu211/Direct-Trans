@@ -17,13 +17,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from allinone_themes import (
-    DEFAULT_THEME_ID,
-    THEME_IDS,
-    label_for,
-    qss_for,
-    tagline_for,
-)
+import allinone_themes as _default_theme_registry
+from allinone_themes import DEFAULT_THEME_ID
 from premium_layout import (
     HOTKEY_ROWS,
     _api_block,
@@ -111,10 +106,19 @@ def _hotkey_rows_widget() -> tuple[QVBoxLayout, QPushButton]:
 class AllInOneSettingsWindow(QWidget):
     """Production-shaped settings shell (sample). Theme via dropdown."""
 
-    def __init__(self, initial_theme_id: str = DEFAULT_THEME_ID, parent=None):
+    def __init__(
+        self,
+        initial_theme_id: str = DEFAULT_THEME_ID,
+        parent=None,
+        theme_registry=None,
+    ):
         super().__init__(parent)
+        self._registry = theme_registry or _default_theme_registry
         self.setObjectName("root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+        reg_default = getattr(self._registry, "DEFAULT_THEME_ID", DEFAULT_THEME_ID)
+        if initial_theme_id not in self._registry.THEME_IDS:
+            initial_theme_id = reg_default
         self._current_theme_id = initial_theme_id
         self._on_theme_changed_callbacks: list = []
 
@@ -174,8 +178,8 @@ class AllInOneSettingsWindow(QWidget):
         row2.addWidget(theme_lbl)
         self._theme_combo = QComboBox()
         self._theme_combo.setObjectName("themeCombo")
-        for tid in THEME_IDS:
-            self._theme_combo.addItem(label_for(tid), tid)
+        for tid in self._registry.THEME_IDS:
+            self._theme_combo.addItem(self._registry.label_for(tid), tid)
         self._theme_combo.currentIndexChanged.connect(self._on_theme_combo_changed)
         row2.addWidget(self._theme_combo)
 
@@ -255,11 +259,12 @@ class AllInOneSettingsWindow(QWidget):
             self.set_theme(tid)
 
     def set_theme(self, theme_id: str) -> None:
-        if theme_id not in THEME_IDS:
-            theme_id = DEFAULT_THEME_ID
+        reg_default = getattr(self._registry, "DEFAULT_THEME_ID", DEFAULT_THEME_ID)
+        if theme_id not in self._registry.THEME_IDS:
+            theme_id = reg_default
         self._current_theme_id = theme_id
-        self.setStyleSheet(qss_for(theme_id))
-        self._tagline.setText(tagline_for(theme_id))
+        self.setStyleSheet(self._registry.qss_for(theme_id))
+        self._tagline.setText(self._registry.tagline_for(theme_id))
         idx = self._theme_combo.findData(theme_id)
         if idx >= 0 and self._theme_combo.currentIndex() != idx:
             self._theme_combo.blockSignals(True)
@@ -279,12 +284,16 @@ def build_allinone_window(
     meta: AllInOneMeta | None = None,
     qss: str | None = None,
     initial_theme_id: str = DEFAULT_THEME_ID,
+    theme_registry=None,
 ) -> AllInOneSettingsWindow:
     """Build window. Legacy `meta,qss` applies theme by id from meta.id if provided."""
     if meta is not None:
-        theme_map = {1: "midnight_gold", 2: "aurora_glass", 3: "rose_champagne"}
+        theme_map = {1: "midnight_gold", 2: "aurora_glass", 3: "rose_champagne", 4: "nord_snow"}
         initial_theme_id = theme_map.get(meta.id, DEFAULT_THEME_ID)
-    win = AllInOneSettingsWindow(initial_theme_id=initial_theme_id)
+    win = AllInOneSettingsWindow(
+        initial_theme_id=initial_theme_id,
+        theme_registry=theme_registry,
+    )
     if qss is not None:
         win.setStyleSheet(qss)
     return win

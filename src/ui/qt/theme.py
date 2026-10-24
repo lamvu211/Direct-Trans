@@ -534,7 +534,135 @@ QLabel#sizeVal {
 }
 """ + _BASE
 
-THEME_IDS = ("midnight_gold", "aurora_glass", "rose_champagne")
+NORD_SNOW_QSS = """
+QWidget#root, QDialog#root {
+    background: #ECEFF4;
+    border: none;
+}
+QWidget#popupRoot {
+    background: qlineargradient(x1:0,y1:0,x2:0,y2:1,
+        stop:0 #ECEFF4, stop:1 #E5E9F0);
+    border: 1px solid #5E81AC;
+}
+QFrame#popupDivider { background-color: #5E81AC; }
+QComboBox#combo::down-arrow, QComboBox#comboMini::down-arrow, QComboBox#themeCombo::down-arrow {
+    border-top-color: #5E81AC;
+}
+QComboBox QAbstractItemView {
+    background-color: #ECEFF4;
+    color: #2E3440;
+    selection-background-color: #D8DEE9;
+    selection-color: #4C6F94;
+    border: 1px solid #D8DEE9;
+    outline: none;
+}
+QFrame#topBar {
+    background: #E5E9F0;
+    border-bottom: 1px solid #D8DEE9;
+}
+QFrame#footBar {
+    background: #E5E9F0;
+    border-top: 1px solid #D8DEE9;
+}
+QLabel#brand {
+    color: #2E3440;
+    font-size: 12pt;
+    font-weight: 700;
+}
+QLabel#brandSub { color: #4C566A; font-weight: 500; }
+QLabel#brandVersion { color: #4C566A; font-style: italic; font-size: 8.5pt; }
+QLabel#tagline { color: #4C566A; font-weight: 500; }
+QFrame#card {
+    background: #ECEFF4;
+    border: 1px solid #D8DEE9;
+}
+QLabel#cardTitle { color: #3B4252; }
+QLabel, QCheckBox, QRadioButton { color: #2E3440; }
+QComboBox#combo, QComboBox#comboMini, QComboBox#themeCombo, QLineEdit#line, QTextEdit#line {
+    background: #ECEFF4;
+    border: 1px solid #D8DEE9;
+    color: #2E3440;
+}
+QComboBox#combo:focus, QLineEdit#line:focus, QTextEdit#line:focus { border-color: #5E81AC; }
+QPushButton#cta, QPushButton#ctaSmall {
+    color: #ECEFF4;
+    border: none;
+    background: #5E81AC;
+}
+QPushButton#cta:hover, QPushButton#ctaSmall:hover {
+    background: #4C6F94;
+}
+QPushButton#cta:focus, QPushButton#ctaSmall:focus {
+    border: 1px solid #4C6F94;
+}
+QPushButton#cta:disabled, QPushButton#ctaSmall:disabled {
+    opacity: 1.0;
+    background: #D8DEE9;
+    color: #4C566A;
+    border: 1px solid #C0C8D4;
+}
+QPushButton#ghost, QToolButton#ghost, QPushButton#showMore {
+    background: #ECEFF4;
+    color: #2E3440;
+    border: 1px solid #D8DEE9;
+}
+QPushButton#ghost:hover, QToolButton#ghost:hover, QPushButton#showMore:hover {
+    background: #E5E9F0;
+    border-color: #C0C8D4;
+}
+QPushButton#ghost:focus, QToolButton#ghost:focus, QPushButton#showMore:focus {
+    border-color: #5E81AC;
+}
+QPushButton#textLink { color: #5E81AC; font-weight: 600; }
+QPushButton#textLink:hover { text-decoration: underline; color: #4C6F94; }
+QFrame#hkRow { background: #E5E9F0; border: 1px solid #D8DEE9; }
+QLabel#hkMode { background: #D8DEE9; color: #5E81AC; }
+QToolButton#hkDel, QPushButton#hkDel { color: #BF616A; border: none; background: transparent; font-size: 9pt; }
+QToolButton#hkDel:hover, QPushButton#hkDel:hover { color: #A54E56; background: rgba(191,97,106,0.12); border-radius: 4px; }
+QCheckBox#optionCheck { color: #5E81AC; font-weight: 600; }
+QLabel#statusBy { color: #3B4252; font-size: 8.5pt; font-weight: 600; }
+QTextEdit#popupText { color: #2E3440; }
+QPushButton#colorBtn {
+    background: #ECEFF4;
+    border: 1px solid #D8DEE9;
+    color: #2E3440;
+}
+QPushButton#colorBtn:hover {
+    border-color: #5E81AC;
+    background: #E5E9F0;
+}
+QFrame#fontSizeBox {
+    background: #ECEFF4;
+    border: 1px solid #D8DEE9;
+}
+QPushButton#sizeBtn {
+    color: #2E3440;
+}
+QPushButton#sizeBtn:hover {
+    color: #5E81AC;
+    background: #D8DEE9;
+}
+QLabel#sizeVal {
+    color: #2E3440;
+}
+QRadioButton::indicator {
+    width: 14px;
+    height: 14px;
+    border-radius: 8px;
+    border: 2px solid #D8DEE9;
+    background: #ECEFF4;
+}
+QRadioButton::indicator:checked {
+    border: 2px solid #5E81AC;
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
+        stop:0 #5E81AC, stop:0.55 #5E81AC, stop:0.60 #ECEFF4, stop:1 #ECEFF4);
+}
+QRadioButton::indicator:hover {
+    border-color: #5E81AC;
+}
+""" + _BASE
+
+THEME_IDS = ("midnight_gold", "aurora_glass", "rose_champagne", "nord_snow")
 
 THEMES: dict[str, dict[str, str]] = {
     "midnight_gold": {
@@ -551,6 +679,11 @@ THEMES: dict[str, dict[str, str]] = {
         "label": "Rose Champagne",
         "tagline": "Warm blush · editorial compact",
         "qss": ROSE_CHAMPAGNE_QSS,
+    },
+    "nord_snow": {
+        "label": "Nord Snow",
+        "tagline": "Frost gray · Nord-inspired · blue accent",
+        "qss": NORD_SNOW_QSS,
     },
 }
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.0.2
+- **Theme**: **Nord Snow** (`nord_snow`) — light frost palette (fourth option in Settings / popup theme dropdown); per-theme popup font defaults; light color picker styling.
+- **Docs & samples**: README, user manual, PySide6 all-in-one samples; `docs/PUBLIC_REPO.md` (không commit ảnh/config cá nhân lên GitHub public).
+- **Build**: `APP_VERSION` **2.0.2**; artifact **`DirectTrans_v2.0.2.exe`**.
+
 ## v2.0.1
 - **Security**: Gemini API key via `x-goog-api-key`; sanitize API error messages before logs/UI.
 - **Single instance**: Packaged exe kills stale `DirectTrans*` processes **before** acquiring the mutex (avoids waking the old exe via `directtrans.signal`).

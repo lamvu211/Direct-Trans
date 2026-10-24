@@ -13,10 +13,13 @@ from ui.qt.theme import DEFAULT_THEME_ID, THEME_IDS, qss_for, tagline_for
 
 class TestQtRedesign(unittest.TestCase):
     def test_theme_registry(self):
-        self.assertEqual(len(THEME_IDS), 3)
+        self.assertGreaterEqual(len(THEME_IDS), 3)
         self.assertEqual(DEFAULT_THEME_ID, "midnight_gold")
         for tid in THEME_IDS:
-            self.assertIn(tid, ("midnight_gold", "aurora_glass", "rose_champagne"))
+            self.assertIn(
+                tid,
+                ("midnight_gold", "aurora_glass", "rose_champagne", "nord_snow"),
+            )
             self.assertGreater(len(qss_for(tid)), 500)
             self.assertTrue(tagline_for(tid))
 

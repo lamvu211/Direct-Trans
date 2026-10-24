@@ -1,4 +1,9 @@
-"""One-off: build src/ui/qt/theme.py from samples."""
+"""One-off: build src/ui/qt/theme.py from samples.
+
+Warning: production ``theme.py`` also defines ``nord_snow`` (v2.0.2+). Re-running this
+script overwrites ``src/ui/qt/theme.py`` from ``allinone_themes.py`` — merge Nord Snow
+manually if you regenerate from samples.
+"""
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]

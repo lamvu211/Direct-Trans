@@ -196,7 +196,15 @@ class ColorPickerPopup(QFrame):
         # Container frame for styling
         card = QFrame()
         card.setObjectName("pickerCard")
-        if theme_id == "rose_champagne":
+        if theme_id == "nord_snow":
+            card.setStyleSheet("""
+                QFrame#pickerCard {
+                    background: #ECEFF4;
+                    border: 1px solid #D8DEE9;
+                    border-radius: 8px;
+                }
+            """)
+        elif theme_id == "rose_champagne":
             card.setStyleSheet("""
                 QFrame#pickerCard {
                     background: #ffffff;

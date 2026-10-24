@@ -1,4 +1,8 @@
-"""Capture screenshots into src/assets for README and user_manual.html."""
+"""Capture screenshots into src/assets for README and user_manual.html.
+
+Uses your real Config() — do not commit PNGs if they show personal provider/model/hotkeys.
+See docs/PUBLIC_REPO.md.
+"""
 
 from __future__ import annotations
 

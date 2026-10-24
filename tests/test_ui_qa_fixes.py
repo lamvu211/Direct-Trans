@@ -196,6 +196,8 @@ class TestUiQaFixes(unittest.TestCase):
         self.assertEqual(self.config.get_popup_style("aurora_glass")["size"], 12)
         self.assertEqual(self.config.get_popup_style("rose_champagne")["color"], "#4C4F69")
         self.assertEqual(self.config.get_popup_style("rose_champagne")["size"], 12)
+        self.assertEqual(self.config.get_popup_style("nord_snow")["color"], "#2E3440")
+        self.assertEqual(self.config.get_popup_style("nord_snow")["size"], 12)
 
         # Test UI controls
         popup = QtPopupWindow(config=self.config)

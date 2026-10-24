@@ -2,7 +2,7 @@
 """
 Launch PySide6 Settings samples.
 
-  python launch_samples.py --allinone   # 3 single-screen themes (recommended)
+  python launch_samples.py --allinone   # 4 single-screen themes (recommended)
   python launch_samples.py              # 5 premium tabbed samples
   python launch_samples.py --classic    # original flat themes
   python launch_samples.py --export
@@ -27,7 +27,7 @@ def main() -> int:
     parser.add_argument("--export", action="store_true", help="Save PNG screenshots and exit")
     parser.add_argument("--one", type=int, help="Show only sample N (1-3 with --allinone, else 1-5)")
     parser.add_argument("--classic", action="store_true", help="Use original non-premium themes")
-    parser.add_argument("--allinone", action="store_true", help="Single-screen layout, 3 color themes")
+    parser.add_argument("--allinone", action="store_true", help="Single-screen layout, 4 color themes")
     args = parser.parse_args()
 
     if args.allinone:
@@ -36,7 +36,7 @@ def main() -> int:
 
         apply_style = apply_premium_app
         prefix = "allinone"
-        max_one = 3
+        max_one = 4
     elif args.classic:
         max_one = 5
         from shared_layout import apply_fusion_app_style, build_settings_window
@@ -63,8 +63,8 @@ def main() -> int:
 
     if args.allinone:
         if args.one is not None:
-            if args.one < 1 or args.one > 3:
-                print("--one must be 1..3 with --allinone", file=sys.stderr)
+            if args.one < 1 or args.one > 4:
+                print("--one must be 1..4 with --allinone", file=sys.stderr)
                 return 2
             theme_ids = [THEME_IDS[args.one - 1]]
         else:

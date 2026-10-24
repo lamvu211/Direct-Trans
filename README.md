@@ -20,9 +20,39 @@
 
 ### Cài đặt (Settings)
 
-Một màn hình: ngôn ngữ UI, theme, nguồn dịch (provider), API key & model, phím tắt, tùy chọn khởi động Windows / cập nhật.
+Một màn hình: ngôn ngữ UI, theme (Midnight Gold, Aurora Glass, Rose Champagne, Nord Snow), nguồn dịch (provider), API key & model, phím tắt, tùy chọn khởi động Windows / cập nhật.
 
-![Giao diện Cài đặt](src/assets/screenshot_settings.png)
+Bấm ảnh thu nhỏ để xem kích thước đầy đủ; hoặc mở từng mục 🔍 bên dưới. (Ảnh trong repo là mẫu UI review; không chứa ảnh chụp máy cá nhân — xem [docs/PUBLIC_REPO.md](docs/PUBLIC_REPO.md).)
+
+<table>
+  <tr>
+    <td align="center" width="25%">
+      <a href="docs/ui-review/screenshots/settings_midnight_gold.png"><img src="docs/ui-review/screenshots/settings_midnight_gold.png" width="200" alt="Midnight Gold" /></a><br>Midnight Gold
+    </td>
+    <td align="center" width="25%">
+      <a href="docs/ui-review/screenshots/settings_aurora_glass.png"><img src="docs/ui-review/screenshots/settings_aurora_glass.png" width="200" alt="Aurora Glass" /></a><br>Aurora Glass
+    </td>
+    <td align="center" width="25%">
+      <a href="docs/ui-review/screenshots/settings_rose_champagne.png"><img src="docs/ui-review/screenshots/settings_rose_champagne.png" width="200" alt="Rose Champagne" /></a><br>Rose Champagne
+    </td>
+    <td align="center" width="25%">
+      Nord Snow<br><sub>Chọn trong app; ảnh review chưa đưa lên repo công khai.</sub>
+    </td>
+  </tr>
+</table>
+
+<details>
+<summary>🔍 Midnight Gold</summary>
+<img src="docs/ui-review/screenshots/settings_midnight_gold.png" alt="Midnight Gold — Settings" />
+</details>
+<details>
+<summary>🔍 Aurora Glass</summary>
+<img src="docs/ui-review/screenshots/settings_aurora_glass.png" alt="Aurora Glass — Settings" />
+</details>
+<details>
+<summary>🔍 Rose Champagne</summary>
+<img src="docs/ui-review/screenshots/settings_rose_champagne.png" alt="Rose Champagne — Settings" />
+</details>
 
 ### Popup dịch
 
@@ -85,11 +115,15 @@ python src/main.py
 python -m pytest tests/ -q
 ```
 
-Ảnh cho tài liệu (Settings, popup, hotkey):
+Ảnh cho tài liệu:
 
 ```bash
-python scripts/capture_manual_assets.py
+python scripts/capture_ui_screenshots.py    # docs/ui-review (review trước khi commit ảnh)
+python scripts/capture_manual_assets.py     # src/assets — không commit nếu ảnh từ config máy bạn
+python scripts/capture_readme_settings.py   # local only → src/assets/readme/ (gitignored)
 ```
+
+Chính sách repo công khai: [docs/PUBLIC_REPO.md](docs/PUBLIC_REPO.md).
 
 ---
 

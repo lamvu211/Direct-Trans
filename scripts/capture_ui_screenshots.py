@@ -1,4 +1,7 @@
-"""Capture Qt UI screenshots for visual review (Settings, popup, dialogs)."""
+"""Capture Qt UI screenshots for visual review (Settings, popup, dialogs).
+
+Exports one PNG set per entry in ``ui.qt.theme.THEME_IDS`` (includes ``nord_snow`` since v2.0.2).
+"""
 
 from __future__ import annotations
 

@@ -155,7 +155,54 @@ QLabel#hkMode { background: #fce7f3; color: #9d174d; }
 QCheckBox#optionCheck { color: #be185d; font-weight: 600; }
 """ + _BASE
 
-THEME_IDS = ("midnight_gold", "aurora_glass", "rose_champagne")
+NORD_SNOW_QSS = """
+QWidget#root {
+    background: #ECEFF4;
+}
+QFrame#topBar {
+    background: #E5E9F0;
+    border-bottom: 1px solid #D8DEE9;
+}
+QFrame#footBar {
+    background: #E5E9F0;
+    border-top: 1px solid #D8DEE9;
+}
+QLabel#brand {
+    color: #2E3440;
+    font-size: 12pt;
+    font-weight: 700;
+}
+QLabel#brandSub { color: #4C566A; }
+QLabel#tagline { color: #4C566A; }
+QFrame#card {
+    background: #ECEFF4;
+    border: 1px solid #D8DEE9;
+}
+QLabel#cardTitle { color: #3B4252; }
+QLabel, QCheckBox { color: #2E3440; }
+QComboBox#combo, QComboBox#comboMini, QComboBox#themeCombo, QLineEdit#line {
+    background: #ECEFF4;
+    border: 1px solid #D8DEE9;
+    color: #2E3440;
+}
+QComboBox#combo:focus, QLineEdit#line:focus { border-color: #5E81AC; }
+QPushButton#cta, QPushButton#ctaSmall {
+    color: #ECEFF4;
+    border: none;
+    background: #5E81AC;
+}
+QPushButton#ghost, QToolButton#ghost, QPushButton#showMore {
+    background: #ECEFF4;
+    color: #2E3440;
+    border: 1px solid #D8DEE9;
+}
+QPushButton#textLink { color: #5E81AC; }
+QFrame#hkRow { background: #E5E9F0; border: 1px solid #D8DEE9; }
+QLabel#hkMode { background: #D8DEE9; color: #5E81AC; }
+QCheckBox#optionCheck { color: #5E81AC; font-weight: 600; }
+""" + _BASE
+
+THEME_IDS = ("midnight_gold", "aurora_glass", "rose_champagne", "nord_snow")
 
 THEMES: dict[str, dict[str, str]] = {
     "midnight_gold": {
@@ -172,6 +219,11 @@ THEMES: dict[str, dict[str, str]] = {
         "label": "Rose Champagne",
         "tagline": "Warm blush · editorial compact",
         "qss": ROSE_CHAMPAGNE_QSS,
+    },
+    "nord_snow": {
+        "label": "Nord Snow",
+        "tagline": "Frost gray · Nord-inspired · blue accent",
+        "qss": NORD_SNOW_QSS,
     },
 }
 
@@ -206,4 +258,9 @@ def rose_champagne():
     return AllInOneMeta(3, label_for("rose_champagne"), tagline_for("rose_champagne")), qss_for("rose_champagne")
 
 
-ALLINONE_THEMES = [midnight_gold, aurora_glass, rose_champagne]
+def nord_snow():
+    from allinone_layout import AllInOneMeta
+    return AllInOneMeta(4, label_for("nord_snow"), tagline_for("nord_snow")), qss_for("nord_snow")
+
+
+ALLINONE_THEMES = [midnight_gold, aurora_glass, rose_champagne, nord_snow]

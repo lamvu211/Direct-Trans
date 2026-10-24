@@ -36,3 +36,8 @@ config.json
 # Internal notes (not part of the product)
 hand-off.md
 issue.md
+
+# Local UI captures (machine config may appear) — see docs/PUBLIC_REPO.md
+src/assets/readme/
+docs/ui-review/v2.0.1-nord-preview/
+samples/settings_pyside6/output/light_candidate_*.png

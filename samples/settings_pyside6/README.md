@@ -7,7 +7,7 @@ Real Qt 6 widgets + **QSS gradients** (not HTML mockups).
 ```bash
 cd samples/settings_pyside6
 pip install PySide6
-python launch_samples.py --allinone   # **single screen**, 3 palettes (no tabs)
+python launch_samples.py --allinone   # **single screen**, 4 palettes (no tabs)
 python launch_samples.py              # premium tabbed samples
 python launch_samples.py --classic    # first-generation flat samples
 python launch_samples.py --export
@@ -18,16 +18,17 @@ python launch_samples.py --one 3
 
 - **Một màn hình**, không tab, **không scroll** (520×572).
 - Hotkeys: **3 dòng** + **「Xem thêm (N)」** / **「Thu gọn」**.
-- **Dropdown Theme** trên header: Midnight Gold · Aurora Glass · Rose Champagne.
+- **Dropdown Theme** trên header: Midnight Gold · Aurora Glass · Rose Champagne · **Nord Snow** (khớp production v2.0.2).
+- **Light candidates (5 samples):** `python launch_light_candidates.py` — xem `LIGHT_CANDIDATES.md` (Nord Snow đã ship trong app; bốn palette kia là draft).
 
 ```bash
 python launch_samples.py --allinone
 python launch_samples.py --allinone --export
 ```
 
-PNG: `output/allinone_1_*.png` … `allinone_3_*.png` (cùng layout, đổi theme).
+PNG: `output/allinone_1_*.png` … `allinone_4_*.png` (cùng layout, đổi theme).
 
-Production UI lives in **`src/ui/qt/`** (see root **`README.md`** and **`CHANGELOG.md`** v2.0.0).
+Production UI lives in **`src/ui/qt/`** (see root **`README.md`** and **`CHANGELOG.md`** v2.0.2).
 
 ## Premium samples — compact · gradient · layout variants
 

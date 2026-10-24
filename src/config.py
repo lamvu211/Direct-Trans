@@ -170,6 +170,7 @@ class Config:
         "midnight_gold": {"color": "#B1B9E5", "size": 12},
         "aurora_glass": {"color": "#B1B9E5", "size": 12},
         "rose_champagne": {"color": "#4C4F69", "size": 12},
+        "nord_snow": {"color": "#2E3440", "size": 12},
     }
 
     def get_popup_style(self, theme_id: str | None = None) -> dict:
