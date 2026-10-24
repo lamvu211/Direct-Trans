@@ -7,6 +7,7 @@ import requests
 import logging
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from constants import (
     DEFAULT_FALLBACK_ORDER,
@@ -20,6 +21,12 @@ from constants import (
 
 class TranslationError(Exception):
     pass
+
+
+@dataclass(frozen=True)
+class TranslationResult:
+    text: str
+    provider: str
 
 
 class TranslationBackend(ABC):
@@ -92,7 +99,7 @@ class GeminiTranslator(BaseHTTPTranslator):
 
     def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
         api_key = kwargs.get('api_key', '')
-        model = kwargs.get('model', 'gemini-3.1-flash-lite')
+        model = kwargs.get('model', 'gemini-flash-lite-latest')
         if not api_key:
             raise TranslationError("Gemini API key not configured")
         
@@ -159,7 +166,7 @@ class MistralTranslator(BaseHTTPTranslator):
 
     def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
         api_key = kwargs.get('api_key', '')
-        model = kwargs.get('model', 'mistral-large-latest')
+        model = kwargs.get('model', 'codestral-latest')
         if not api_key:
             raise TranslationError("Mistral API key not configured")
 
@@ -186,6 +193,7 @@ class MistralTranslator(BaseHTTPTranslator):
 
 class GoogleFreeTranslator(BaseHTTPTranslator):
     URL = "https://translate.googleapis.com/translate_a/single"
+    CLIENT_IDS = ("dict-chrome-ex", "at", "gtx")
     CHUNK_SIZE = 5000
 
     def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
@@ -199,13 +207,6 @@ class GoogleFreeTranslator(BaseHTTPTranslator):
         return self._translate_chunk(text, target_lang_code)
 
     def _translate_chunk(self, text: str, target_lang: str) -> str:
-        params = {
-            "client": "gtx",
-            "sl": "auto",
-            "tl": target_lang,
-            "dt": "t",
-            "q": text
-        }
         headers = {
             "User-Agent": (
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -214,14 +215,31 @@ class GoogleFreeTranslator(BaseHTTPTranslator):
             )
         }
 
-        try:
-            data = self._make_request_with_retry(self.URL, params=params, headers=headers, method="get")
-            # Response is a nested array: [[["translated", "original", ...], ...], ...]
-            if data and data[0]:
-                return ''.join(part[0] for part in data[0] if part and part[0])
-            raise TranslationError("Empty Google Translate response")
-        except (ValueError, TypeError, IndexError) as e:
-            raise TranslationError(f"Google Translate parse error: {e}")
+        last_error = None
+        for client in self.CLIENT_IDS:
+            params = {
+                "client": client,
+                "sl": "auto",
+                "tl": target_lang,
+                "dt": "t",
+                "q": text,
+            }
+            try:
+                data = self._make_request_with_retry(
+                    self.URL, params=params, headers=headers, method="get"
+                )
+                if data and data[0]:
+                    return ''.join(part[0] for part in data[0] if part and part[0])
+                last_error = TranslationError("Empty Google Translate response")
+            except TranslationError as e:
+                last_error = e
+                logging.warning("Google Free client '%s' failed: %s", client, e)
+                continue
+            except (ValueError, TypeError, IndexError) as e:
+                last_error = TranslationError(f"Google Translate parse error: {e}")
+                continue
+
+        raise last_error or TranslationError("Google Translate failed for all clients")
 
     @staticmethod
     def _split_text(text: str, max_len: int) -> list:
@@ -255,8 +273,8 @@ class TranslationManager:
             PROVIDER_GOOGLE_FREE: GoogleFreeTranslator(),
         }
 
-    def translate(self, text: str, target_lang_name: str, target_lang_code: str) -> str:
-        """Translate with fallback chain."""
+    def translate(self, text: str, target_lang_name: str, target_lang_code: str) -> TranslationResult:
+        """Translate with fallback chain. Returns text and the provider that succeeded."""
         # 1. Determine provider order
         primary = self.config.get_provider()
         if self.config.data.get('fallback_enabled', True):
@@ -296,7 +314,7 @@ class TranslationManager:
                 logging.info(f"Provider '{provider}' succeeded.")
 
                 result = re.sub(r'<think>.*?</think>\s*', '', result, count=1, flags=re.DOTALL).strip()
-                return result
+                return TranslationResult(text=result, provider=provider)
             except Exception as e:
                 logging.warning(f"Provider '{provider}' failed: {e}")
                 last_error = e

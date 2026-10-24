@@ -129,6 +129,15 @@ class TrayIcon:
         except Exception as e:
             logging.error(f"Error in pystray run: {e}")
 
+    def notify(self, title: str, message: str) -> None:
+        """Brief tray balloon (e.g. hotkey ignored while busy)."""
+        if not self.icon:
+            return
+        try:
+            self.icon.notify(message, title=title)
+        except Exception as e:
+            logging.info("Tray notify unavailable: %s — %s: %s", e, title, message)
+
     def stop(self):
         """Stop the tray icon."""
         if self.icon:

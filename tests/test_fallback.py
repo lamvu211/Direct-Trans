@@ -71,7 +71,8 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_GROQ: StubBackend(result='should not run'),
         })
         result = mgr.translate('Hello', 'Vietnamese', 'vi')
-        self.assertEqual(result, 'Xin chào')
+        self.assertEqual(result.text, 'Xin chào')
+        self.assertEqual(result.provider, PROVIDER_GEMINI)
         self.assertEqual(len(gemini.calls), 1)
 
     def test_fallback_on_primary_failure(self):
@@ -88,7 +89,8 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_GOOGLE_FREE: StubBackend(result='skip'),
         })
         result = mgr.translate('Hello', 'Vietnamese', 'vi')
-        self.assertEqual(result, 'Hello from Groq')
+        self.assertEqual(result.text, 'Hello from Groq')
+        self.assertEqual(result.provider, PROVIDER_GROQ)
         self.assertEqual(len(gemini.calls), 1)
         self.assertEqual(len(groq.calls), 1)
 
@@ -101,7 +103,7 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_GROQ: groq,
         })
         result = mgr.translate('Hello', 'Vietnamese', 'vi')
-        self.assertEqual(result, 'Groq OK')
+        self.assertEqual(result.text, 'Groq OK')
         self.assertEqual(len(gemini.calls), 0)
         self.assertEqual(len(groq.calls), 1)
 
@@ -116,7 +118,7 @@ class TestFallbackChain(unittest.TestCase):
             PROVIDER_GOOGLE_FREE: google,
         })
         result = mgr.translate('Hello', 'Vietnamese', 'vi')
-        self.assertEqual(result, 'Free translate')
+        self.assertEqual(result.text, 'Free translate')
         self.assertEqual(len(google.calls), 1)
 
     def test_fallback_disabled_only_tries_primary(self):
@@ -139,7 +141,7 @@ class TestFallbackChain(unittest.TestCase):
         gemini = StubBackend(result='<think>reasoning</think>Xin chào')
         mgr = self._manager_with_stubs(config, {PROVIDER_GEMINI: gemini})
         result = mgr.translate('Hello', 'Vietnamese', 'vi')
-        self.assertEqual(result, 'Xin chào')
+        self.assertEqual(result.text, 'Xin chào')
 
     def test_all_providers_fail_raises(self):
         config = MockConfig(api_keys={

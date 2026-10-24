@@ -6,7 +6,8 @@ If a newer version is found, prompts the user and opens the browser to download.
 import logging
 import time
 import threading
-import webbrowser
+from datetime import datetime, timedelta
+
 import requests
 
 from constants import APP_VERSION, GITHUB_REPO, GITHUB_RELEASES_URL
@@ -45,8 +46,10 @@ def _fetch_latest_version() -> dict | None:
     return None
 
 
-def _should_check(config) -> bool:
-    """Determine if we should check for updates based on snooze settings."""
+def _should_prompt(config, force: bool = False) -> bool:
+    """Snooze applies only to automatic checks (startup / 9:00 AM)."""
+    if force:
+        return True
     snooze_until = config.get_snooze_until()
     if snooze_until > 0 and time.time() < snooze_until:
         logging.info("Update check snoozed until %s", time.ctime(snooze_until))
@@ -54,117 +57,93 @@ def _should_check(config) -> bool:
     return True
 
 
-def _show_update_dialog(root, config, latest_tag: str, release_name: str):
-    """Show update notification dialog on the main Tkinter thread."""
-    import tkinter as tk
-    from tkinter import ttk
-
-    ui_lang = config.data.get('ui_language', 'vi')
-
-    strings = {
-        'vi': {
-            'title': 'Cập nhật mới',
-            'message': f'Phiên bản {latest_tag} đã sẵn sàng!\nBạn đang dùng v{APP_VERSION}.',
-            'update_btn': '🌐 Tải về từ GitHub',
-            'snooze_btn': '⏰ Nhắc lại sau (7 ngày)',
-            'skip_btn': '⏭ Bỏ qua phiên bản này',
-        },
-        'en': {
-            'title': 'Update Available',
-            'message': f'Version {latest_tag} is available!\nYou are using v{APP_VERSION}.',
-            'update_btn': '🌐 Download from GitHub',
-            'snooze_btn': '⏰ Remind me later (7 days)',
-            'skip_btn': '⏭ Skip this version',
-        },
-        'ko': {
-            'title': '업데이트 가능',
-            'message': f'{latest_tag} 버전을 사용할 수 있습니다!\n현재 v{APP_VERSION}을 사용 중입니다.',
-            'update_btn': '🌐 GitHub에서 다운로드',
-            'snooze_btn': '⏰ 나중에 알림 (7일)',
-            'skip_btn': '⏭ 이 버전 건너뛰기',
-        },
-        'zh': {
-            'title': '有新版本',
-            'message': f'版本 {latest_tag} 已就绪！\n当前使用 v{APP_VERSION}。',
-            'update_btn': '🌐 从 GitHub 下载',
-            'snooze_btn': '⏰ 稍后提醒 (7 天)',
-            'skip_btn': '⏭ 跳过此版本',
-        },
-        'ja': {
-            'title': 'アップデート可能',
-            'message': f'バージョン {latest_tag} が利用可能です！\n現在 v{APP_VERSION} を使用中です。',
-            'update_btn': '🌐 GitHub からダウンロード',
-            'snooze_btn': '⏰ 後で通知 (7 日後)',
-            'skip_btn': '⏭ このバージョンをスキップ',
-        },
-    }
-    s = strings.get(ui_lang, strings['en'])
-
-    dialog = tk.Toplevel(root)
-    dialog.title(s['title'])
-    dialog.resizable(False, False)
-    dialog.grab_set()
-
-    # Center on screen
-    dialog.update_idletasks()
-    w, h = 380, 180
-    x = (dialog.winfo_screenwidth() - w) // 2
-    y = (dialog.winfo_screenheight() - h) // 2
-    dialog.geometry(f"{w}x{h}+{x}+{y}")
-
-    msg_label = tk.Label(dialog, text=s['message'], font=("Segoe UI", 11), justify='center')
-    msg_label.pack(pady=(18, 12))
-
-    btn_frame = tk.Frame(dialog)
-    btn_frame.pack(fill='x', padx=20, pady=(0, 12))
-
-    def on_update():
-        webbrowser.open(GITHUB_RELEASES_URL)
-        dialog.destroy()
-
-    def on_snooze():
-        config.snooze_update(days=7)
-        dialog.destroy()
-
-    def on_skip():
-        config.skip_version(latest_tag)
-        dialog.destroy()
-
-    ttk.Button(btn_frame, text=s['update_btn'], command=on_update).pack(fill='x', pady=2)
-    ttk.Button(btn_frame, text=s['snooze_btn'], command=on_snooze).pack(fill='x', pady=2)
-    ttk.Button(btn_frame, text=s['skip_btn'], command=on_skip).pack(fill='x', pady=2)
-
-    # Handle window close (X button) same as snooze
-    dialog.protocol("WM_DELETE_WINDOW", on_snooze)
+def ms_until_next_local_time(hour: int, minute: int = 0) -> int:
+    """Milliseconds until the next occurrence of hour:minute (local time)."""
+    now = datetime.now()
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if now >= target:
+        target += timedelta(days=1)
+    delta = target - now
+    return max(0, int(delta.total_seconds() * 1000))
 
 
-def check_for_updates_in_background(root, config):
+def _show_update_dialog(_root, config, latest_tag: str, release_name: str):
+    from ui.qt.updater_dialog import show_update_dialog
+
+    show_update_dialog(config, latest_tag, release_name)
+
+
+def _run_update_check(_root, config, force: bool = False, on_finish=None):
+    if not _should_prompt(config, force=force):
+        return
+
+    release = _fetch_latest_version()
+    if not release:
+        if force and on_finish:
+            try:
+                from ui.qt.dispatch import run_on_main
+                run_on_main(lambda: on_finish("error", "network"))
+            except Exception:
+                pass
+        return
+
+    latest_tag = release['tag']
+    if not latest_tag:
+        if force and on_finish:
+            try:
+                from ui.qt.dispatch import run_on_main
+                run_on_main(lambda: on_finish("error", "invalid_tag"))
+            except Exception:
+                pass
+        return
+
+    current = _parse_version(APP_VERSION)
+    latest = _parse_version(latest_tag)
+
+    if latest <= current:
+        logging.info("App is up to date (current=%s, latest=%s)", APP_VERSION, latest_tag)
+        if force and on_finish:
+            try:
+                from ui.qt.dispatch import run_on_main
+                run_on_main(lambda: on_finish("up_to_date", APP_VERSION))
+            except Exception:
+                pass
+        return
+
+    if config.is_version_skipped(latest_tag) and not force:
+        logging.info("Version %s is skipped until reminder expires", latest_tag)
+        return
+
+    logging.info("New version available: %s (current: %s)", latest_tag, APP_VERSION)
+
+    def _show():
+        _show_update_dialog(_root, config, latest_tag, release.get('name', ''))
+
+    try:
+        from ui.qt.dispatch import run_on_main
+        run_on_main(_show)
+    except Exception:
+        if _root and hasattr(_root, "after"):
+            _root.after(0, _show)
+
+
+def check_for_updates_in_background(_root, config, force: bool = False, on_finish=None):
     """Run update check on a background thread. Shows dialog on main thread if update found."""
+
     def _check():
-        if not _should_check(config):
-            return
-
-        release = _fetch_latest_version()
-        if not release:
-            return
-
-        latest_tag = release['tag']
-        if not latest_tag:
-            return
-
-        current = _parse_version(APP_VERSION)
-        latest = _parse_version(latest_tag)
-
-        if latest <= current:
-            logging.info("App is up to date (current=%s, latest=%s)", APP_VERSION, latest_tag)
-            return
-
-        if latest_tag in config.get_skipped_versions():
-            logging.info("Version %s was skipped by user", latest_tag)
-            return
-
-        logging.info("New version available: %s (current: %s)", latest_tag, APP_VERSION)
-        root.after(0, lambda: _show_update_dialog(root, config, latest_tag, release.get('name', '')))
+        _run_update_check(_root, config, force=force, on_finish=on_finish)
 
     thread = threading.Thread(target=_check, daemon=True)
     thread.start()
+
+
+def schedule_daily_update_check(schedule_ms, config, hour: int = 9, minute: int = 0):
+    """Schedule the next automatic update check at local hour:minute (default 9:00 AM)."""
+
+    def _tick():
+        check_for_updates_in_background(None, config, force=False)
+        schedule_daily_update_check(schedule_ms, config, hour=hour, minute=minute)
+
+    delay = ms_until_next_local_time(hour, minute)
+    logging.info("Next scheduled update check in %d ms (at %02d:%02d local)", delay, hour, minute)
+    schedule_ms(delay, _tick)

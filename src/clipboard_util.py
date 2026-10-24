@@ -96,7 +96,7 @@ class ClipboardUtil:
 
     @staticmethod
     def replace_selected_text(translated_text: str, original_rtf: bytes | None,
-                              target_lang: str):
+                              target_lang: str, original_text: str | None = None):
         """
         Replace the selected text with translated text, preserving formatting.
         """
@@ -106,7 +106,7 @@ class ClipboardUtil:
         write_dict = {}
         if original_rtf:
             new_rtf = RTFManipulator.replace_text_preserve_format(
-                original_rtf, translated_text, target_lang
+                original_rtf, translated_text, target_lang, original_text=original_text
             )
             write_dict[CF_RTF] = new_rtf
             
@@ -234,8 +234,104 @@ class RTFManipulator:
     """RTF manipulation: replace text while preserving formatting, change font per target language."""
 
     @staticmethod
+    def _align_translation_lines(translated_lines: list, num_text_paragraphs: int) -> list:
+        """Map translation lines to text paragraphs; merge overflow into the last paragraph."""
+        if num_text_paragraphs <= 0:
+            return []
+        if len(translated_lines) == num_text_paragraphs:
+            return list(translated_lines)
+        if len(translated_lines) > num_text_paragraphs:
+            merged = translated_lines[: num_text_paragraphs - 1]
+            merged.append('\n'.join(translated_lines[num_text_paragraphs - 1 :]))
+            return merged
+        # Fewer lines than paragraphs: map early lines 1:1, last line on the last paragraph
+        result = [''] * num_text_paragraphs
+        for i in range(len(translated_lines) - 1):
+            result[i] = translated_lines[i]
+        if translated_lines:
+            result[num_text_paragraphs - 1] = translated_lines[-1]
+        return result
+
+    @staticmethod
+    def _nonempty_lines(text: str) -> list:
+        return [
+            line.strip()
+            for line in text.replace('\r\n', '\n').split('\n')
+            if line.strip()
+        ]
+
+    @staticmethod
+    def _normalize_for_match(s: str) -> str:
+        return re.sub(r'\s+', ' ', s.strip())
+
+    @staticmethod
+    def _map_via_original_lines(text_paragraphs, original_lines, translated_lines):
+        """
+        Group consecutive RTF text paragraphs to match plain-text lines, then assign translations.
+        """
+        result = {}
+        rtf_i = 0
+        for oi, orig_line in enumerate(original_lines):
+            if rtf_i >= len(text_paragraphs):
+                return None
+            target = RTFManipulator._normalize_for_match(orig_line)
+            acc = ''
+            first_idx = None
+            start_rtf_i = rtf_i
+            matched = False
+            while rtf_i < len(text_paragraphs):
+                idx, p_text = text_paragraphs[rtf_i]
+                if first_idx is None:
+                    first_idx = idx
+                acc += p_text
+                acc_norm = RTFManipulator._normalize_for_match(acc)
+                if acc_norm == target or (
+                    target in acc_norm and len(acc_norm) <= len(target) + 40
+                ):
+                    result[first_idx] = translated_lines[oi]
+                    for merge_j in range(start_rtf_i + 1, rtf_i + 1):
+                        result[text_paragraphs[merge_j][0]] = ''
+                    rtf_i += 1
+                    matched = True
+                    break
+                if len(acc_norm) > len(target) + 80:
+                    return None
+                rtf_i += 1
+            if not matched:
+                return None
+        if rtf_i < len(text_paragraphs):
+            return None
+        return result
+
+    @staticmethod
+    def _build_paragraph_translation_map(text_paragraphs, translated_lines, original_text=None):
+        n_para = len(text_paragraphs)
+        if n_para == 0:
+            return {}
+        if n_para == len(translated_lines):
+            return {text_paragraphs[i][0]: translated_lines[i] for i in range(n_para)}
+
+        if original_text:
+            original_lines = RTFManipulator._nonempty_lines(original_text)
+            if len(original_lines) == len(translated_lines):
+                mapped = RTFManipulator._map_via_original_lines(
+                    text_paragraphs, original_lines, translated_lines
+                )
+                if mapped is not None:
+                    return mapped
+
+        aligned = RTFManipulator._align_translation_lines(translated_lines, n_para)
+        # Fewer translation lines than RTF paragraphs: middle slots become '' and erase content.
+        if len(translated_lines) < n_para and any(
+            not aligned[i] for i in range(n_para - 1)
+        ):
+            return None
+        return {text_paragraphs[i][0]: aligned[i] for i in range(n_para)}
+
+    @staticmethod
     def replace_text_preserve_format(original_rtf: bytes, new_text: str,
-                                     target_lang: str) -> bytes:
+                                     target_lang: str,
+                                     original_text: str | None = None) -> bytes:
         """
         Replace text in RTF while preserving formatting.
         Falls back to simple RTF if parsing fails.
@@ -246,14 +342,19 @@ class RTFManipulator:
         new_font = FontMapper.get_font(target_lang)
 
         try:
-            result = RTFManipulator._do_rtf_replace(rtf_str, new_text, new_font)
+            result = RTFManipulator._do_rtf_replace(
+                rtf_str, new_text, new_font, original_text=original_text
+            )
             return result.encode('utf-8')
+        except ValueError:
+            return RTFManipulator._create_simple_rtf(new_text, new_font).encode('utf-8')
         except Exception:
             # Fallback: create simple RTF with the new font
             return RTFManipulator._create_simple_rtf(new_text, new_font).encode('utf-8')
 
     @staticmethod
-    def _do_rtf_replace(rtf_str: str, new_text: str, new_font: str) -> str:
+    def _do_rtf_replace(rtf_str: str, new_text: str, new_font: str,
+                         original_text: str | None = None) -> str:
         """
         Replace text content in RTF while preserving control words and paragraph structure.
         """
@@ -347,23 +448,24 @@ class RTFManipulator:
                 text_paragraphs.append((idx, p_text))
 
         # 3. Split translated text into lines (ignore empty lines to match text_paragraphs)
-        translated_lines = [line.strip() for line in new_text.replace('\r\n', '\n').split('\n') if line.strip()]
+        translated_lines = RTFManipulator._nonempty_lines(new_text)
+
+        trans_by_text_para = RTFManipulator._build_paragraph_translation_map(
+            text_paragraphs, translated_lines, original_text
+        )
+        if trans_by_text_para is None:
+            raise ValueError("Cannot align translation lines to RTF paragraphs safely")
 
         # 4. Map translated lines to original text-containing paragraphs
         new_paragraphs = []
-        translated_idx = 0
         applied_font = False
 
         for idx, (p_tokens, p_break) in enumerate(paragraphs):
             # Check if this paragraph contains text in original
-            has_text = any(idx == orig_idx for orig_idx, _ in text_paragraphs)
+            has_text = idx in trans_by_text_para
             
             if has_text:
-                if translated_idx < len(translated_lines):
-                    trans_line = translated_lines[translated_idx]
-                    translated_idx += 1
-                else:
-                    trans_line = '' # Clear the remaining text to avoid mixing languages
+                trans_line = trans_by_text_para[idx]
                 
                 # Calculate total original text length in this paragraph
                 orig_text_parts = []

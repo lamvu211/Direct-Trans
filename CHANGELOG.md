@@ -1,5 +1,40 @@
 # Changelog
 
+## v2.0.0
+
+### UI (PySide6)
+- **All-in-one Settings** on Qt 6 (`Fusion` + QSS): translation provider, API keys, options, and hotkeys on one scrollable screen (fixed window size; body scrolls inside `QScrollArea`).
+- **Three themes** (header dropdown): Midnight Gold, Aurora Glass, Rose Champagne — persisted as `ui_theme` in `config.json`.
+- **Header**: UI language + theme selectors (compact width, no combo arrow chrome); User manual, Feedback, and in-app **Update** check.
+- **API keys**: Toolbar (Load models, Test, Save key) with bold **Pass** / **Fail** status; model list preserves selection after reload; clear control inside the API key field; **Get API key** opens the provider link.
+- **Hotkeys**: Up to three rows on Settings + **Show more** opens a scrollable manage dialog; double-click a row to edit; global hotkeys pause while add/edit dialogs are open; compact row spacing.
+- **Translation popup (Qt)**: Loading / ready / error states; Copy and Replace disabled while loading; provider status line (including fallback); Esc closes (no redundant close control).
+- **Update dialog**: Closing the window no longer snoozes updates.
+- **High-DPI**: Settings and popup sizes scale via `ui/dpi_util.py`.
+
+### Core (unchanged behavior, same config schema)
+- Tray (`pystray`), native `RegisterHotKey` hotkeys, clipboard RTF replace, translator fallback chain, DPAPI API keys, auto-update from GitHub Releases, single-instance mutex + signal file.
+- Packaged **`.exe`**: opens Settings on launch; resets Gemini/Groq/Mistral **model names** to defaults each run (API keys kept).
+
+### Build & version
+- `APP_VERSION` **2.0.0**; artifact **`DirectTrans_v2.0.0.exe`** (`DirectTrans.spec`, `build.bat`).
+
+### Known limitations
+- Open issues (RTF replace edge cases, special keys in hotkeys, complex clipboard restore): see [`issue.md`](issue.md).
+- Intentional product behavior (kill old `DirectTrans*` on exe launch, automatic fallback order, model reset on exe): see [`REVIEW_INTENT.md`](REVIEW_INTENT.md).
+
+## v1.0.12
+- **Settings on exe startup**: Packaged `.exe` always opens the Settings window when launched (reduces confusion after install).
+- **Feedback button**: Opens email to report issues with `directtrans.log` attached (Outlook COM, or mailto fallback with log path).
+- **Default models on each exe launch**: Gemini/Groq/Mistral model fields reset to defaults when starting the frozen build.
+- **Mistral API key URL**: Link points to `admin.mistral.ai/organization/api-keys`.
+- **User manual (Vietnamese)**: Trimmed sections; documents auto-open Settings and Feedback.
+- **Hotkey dialog warning**: Added localized hint to avoid Space, F1–F12, Enter, Tab, etc. as the main key (mitigation until VK mapping is implemented).
+- **Single-instance signal file**: Open Settings only when `directtrans.signal` is deleted successfully; prevents repeated Settings focus every 2s if delete fails.
+- **RTF replace line alignment**: When translation line count differs from source paragraphs, merge extra lines into the last paragraph; partial fix for AI line-count mismatch (see `issue.md` §3).
+- **Default models**: Gemini `gemini-flash-lite-latest`; Mistral `codestral-latest`. Mistral “Load Models” lists only `codestral-latest` and `ministral-8b-latest`.
+- **Google Free**: Try clients `dict-chrome-ex`, `at`, then `gtx` on `translate_a/single` when `gtx` returns 429.
+
 ## v1.0.11
 - **Enhanced translation system prompt**: Added automatic context detection (academic research, technical standards/guides, business emails, executive reports), native fluency polishing when source and target languages match, respectful honorifics for superiors/clients vs neutral tone for general descriptions, and holistic document purpose alignment.
 
@@ -19,7 +54,7 @@
 - **Fixed RTF parsing for Microsoft Office**: Replaced regex with a brace-counting algorithm for `\fonttbl` extraction in RTF processing. This resolves an issue where pasting translated text back into Word or PowerPoint would cause fonts to unexpectedly increase in size or fail to paste entirely due to nested brace structures in Office's RTF format.
 
 ## v1.0.6
-- **Fixed Replace button not pasting text**: The `Replace` button in the popup window previously failed because it captured the popup's own window handle when clicked, rather than the target application. It now correctly captures and restores focus to the original active window before simulating `Ctrl+V`.
+- **Fixed Replace button not pasting text**: The `Replace` button in the popup window previously failed because it captured the popup's own window handle when clicked, rather than the target application. It now correctly captures and restores focus to the original application before simulating `Ctrl+V`.
 - **Disabled popup always-on-top**: The translation popup no longer forces itself to stay on top (`-topmost`) of other windows, improving UX when switching to other applications.
 - **Fixed version upgrade not replacing old process**: `kill_old_processes()` used exact name `DirectTrans.exe` which didn't match versioned executables like `DirectTrans_v1.0.4.exe`. Now matches any process starting with "DirectTrans".
 - **Fixed auto-start registry not updating on upgrade**: When upgrading from v1.0.4 to v1.0.5+, the Windows startup registry entry still pointed to the old exe. Added `_heal_auto_start_path()` that automatically detects and updates the registry path on startup.

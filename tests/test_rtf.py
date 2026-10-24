@@ -102,6 +102,66 @@ class TestRTFReplace(unittest.TestCase):
         self.assertIn('\\b', rtf)
 
     @patch('font_mapper.FontMapper.get_font', return_value='Arial')
+    def test_align_extra_translation_lines_merged_into_last(self, _mock_font):
+        three_para_rtf = (
+            r'{\rtf1\ansi\deff0{\fonttbl{\f0 Arial;}}'
+            r'\f0 One\par Two\par Three'
+            r'}'
+        )
+        result = RTFManipulator.replace_text_preserve_format(
+            three_para_rtf.encode('utf-8'),
+            'A\nB\nC\nD',
+            'en',
+        )
+        rtf = result.decode('utf-8')
+        self.assertIn('A', rtf)
+        self.assertIn('B', rtf)
+        self.assertIn('C', rtf)
+        self.assertIn('D', rtf)
+        self.assertNotIn('One', rtf)
+
+    def test_align_translation_lines_helper(self):
+        self.assertEqual(
+            RTFManipulator._align_translation_lines(['a', 'b', 'c'], 2),
+            ['a', 'b\nc'],
+        )
+        self.assertEqual(
+            RTFManipulator._align_translation_lines(['only'], 3),
+            ['', '', 'only'],
+        )
+
+    @patch('font_mapper.FontMapper.get_font', return_value='Arial')
+    def test_fewer_translation_lines_uses_simple_rtf_fallback(self, _mock_font):
+        """Avoid clearing middle RTF paragraphs when line counts diverge."""
+        three_para_rtf = (
+            r'{\rtf1\ansi\deff0{\fonttbl{\f0 Arial;}}'
+            r'\f0 One\par Two\par Three'
+            r'}'
+        )
+        result = RTFManipulator.replace_text_preserve_format(
+            three_para_rtf.encode('utf-8'),
+            'Alpha\nBeta',
+            'en',
+            original_text='One\nTwo\nThree',
+        )
+        rtf = result.decode('utf-8')
+        self.assertIn('Alpha', rtf)
+        self.assertIn('Beta', rtf)
+        self.assertNotIn('One', rtf)
+        self.assertNotIn('Two', rtf)
+
+    def test_map_via_original_lines_merges_split_rtf_paragraphs(self):
+        text_paragraphs = [(0, 'Hello'), (1, ' world'), (2, 'Second')]
+        original_lines = ['Hello world', 'Second']
+        translated_lines = ['Xin chào', 'Hai']
+        mapped = RTFManipulator._map_via_original_lines(
+            text_paragraphs, original_lines, translated_lines
+        )
+        self.assertEqual(mapped[0], 'Xin chào')
+        self.assertEqual(mapped[1], '')
+        self.assertEqual(mapped[2], 'Hai')
+
+    @patch('font_mapper.FontMapper.get_font', return_value='Arial')
     def test_replace_with_nested_fonttbl(self, _mock_font):
         result = RTFManipulator.replace_text_preserve_format(
             NESTED_BRACE_RTF.encode('utf-8'), 'Success', 'en'

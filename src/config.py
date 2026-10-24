@@ -31,11 +31,14 @@ class Config:
         },
         "fallback_enabled": True,
         "fallback_order": list(DEFAULT_FALLBACK_ORDER),
-        "gemini_model": "gemini-3.1-flash-lite",
+        "gemini_model": "gemini-flash-lite-latest",
         "groq_model": "openai/gpt-oss-120b",
-        "mistral_model": "mistral-large-latest",
+        "mistral_model": "codestral-latest",
         "auto_start": False,
+        "ui_theme": "midnight_gold",
+        "ui_language": "vi",
         "skipped_versions": [],
+        "version_skip_until": {},
         "snooze_update_until": 0,
         "hotkeys": [
             {
@@ -59,8 +62,16 @@ class Config:
         self.config_path = self._resolve_config_path()
         self._was_created = False
         self.data = self._load()
+        if getattr(sys, "frozen", False):
+            self.reset_provider_models_to_defaults()
 
-
+    def reset_provider_models_to_defaults(self):
+        """Reset AI model names to defaults (used on each packaged exe launch)."""
+        defaults = self.DEFAULT_CONFIG
+        self.data["gemini_model"] = defaults["gemini_model"]
+        self.data["groq_model"] = defaults["groq_model"]
+        self.data["mistral_model"] = defaults["mistral_model"]
+        self.save()
 
     def _resolve_config_path(self) -> str:
         if getattr(sys, 'frozen', False):
@@ -89,6 +100,8 @@ class Config:
         # Merge with defaults to fill in any missing keys
         merged = copy.deepcopy(self.DEFAULT_CONFIG)
         self._deep_merge(merged, data)
+        if not isinstance(merged.get("version_skip_until"), dict):
+            merged["version_skip_until"] = {}
         return merged
 
     def _deep_merge(self, base: dict, override: dict):
@@ -129,6 +142,46 @@ class Config:
             logging.warning(f"Decrypt API key failed: {e}. Key might be corrupted or from a different user context.")
             return ""
 
+    # --- UI ---
+    def get_ui_theme(self) -> str:
+        from ui.qt.theme import DEFAULT_THEME_ID, THEME_IDS
+
+        tid = self.data.get("ui_theme", DEFAULT_THEME_ID)
+        return tid if tid in THEME_IDS else DEFAULT_THEME_ID
+
+    def set_ui_theme(self, theme_id: str) -> None:
+        self.data["ui_theme"] = theme_id
+        self.save()
+
+    DEFAULT_POPUP_STYLE = {
+        "midnight_gold": {"color": "#B1B9E5", "size": 12},
+        "aurora_glass": {"color": "#B1B9E5", "size": 12},
+        "rose_champagne": {"color": "#4C4F69", "size": 12},
+    }
+
+    def get_popup_style(self, theme_id: str | None = None) -> dict:
+        if not theme_id:
+            theme_id = self.get_ui_theme()
+        styles = self.data.get("popup_styles", {})
+        default = self.DEFAULT_POPUP_STYLE.get(theme_id, {"color": "#B1B9E5", "size": 12})
+        res = dict(default)
+        if isinstance(styles.get(theme_id), dict):
+            res.update(styles[theme_id])
+        return res
+
+    def set_popup_style(self, theme_id: str | None = None, color: str | None = None, size: int | None = None):
+        if not theme_id:
+            theme_id = self.get_ui_theme()
+        if "popup_styles" not in self.data:
+            self.data["popup_styles"] = {}
+        cur = self.get_popup_style(theme_id)
+        if color is not None:
+            cur["color"] = color.upper()
+        if size is not None:
+            cur["size"] = max(8, min(48, int(size)))
+        self.data["popup_styles"][theme_id] = cur
+        self.save()
+
     # --- Provider ---
     def get_provider(self) -> str:
         return self.data.get('translation_provider', DEFAULT_PROVIDER)
@@ -149,7 +202,7 @@ class Config:
         self.save()
 
     def get_gemini_model(self) -> str:
-        return self.data.get('gemini_model', 'gemini-3.1-flash-lite')
+        return self.data.get('gemini_model', 'gemini-flash-lite-latest')
 
     def set_gemini_model(self, model: str):
         self.data['gemini_model'] = model
@@ -163,7 +216,7 @@ class Config:
         self.save()
 
     def get_mistral_model(self) -> str:
-        return self.data.get('mistral_model', 'mistral-large-latest')
+        return self.data.get('mistral_model', 'codestral-latest')
 
     def set_mistral_model(self, model: str):
         self.data['mistral_model'] = model
@@ -254,16 +307,32 @@ class Config:
     def get_skipped_versions(self) -> list:
         return self.data.get('skipped_versions', [])
 
-    def skip_version(self, version: str):
-        skipped = self.data.setdefault('skipped_versions', [])
-        if version not in skipped:
-            skipped.append(version)
+    def is_version_skipped(self, version: str) -> bool:
+        """True while user chose Skip for this release (remind again after expiry)."""
+        import time
+
+        until_map = self.data.get("version_skip_until") or {}
+        until = until_map.get(version, 0)
+        if until and time.time() < until:
+            return True
+        if until and time.time() >= until:
+            until_map.pop(version, None)
+            self.data["version_skip_until"] = until_map
             self.save()
+        return False
+
+    def skip_version(self, version: str, days: int = 7):
+        import time
+
+        until_map = self.data.setdefault("version_skip_until", {})
+        until_map[version] = time.time() + (days * 86400)
+        self.save()
 
     def get_snooze_until(self) -> float:
         return self.data.get('snooze_update_until', 0)
 
-    def snooze_update(self, days: int = 7):
+    def snooze_update(self, days: int = 1):
         import time
         self.data['snooze_update_until'] = time.time() + (days * 86400)
         self.save()
+

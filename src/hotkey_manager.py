@@ -20,6 +20,38 @@ WM_QUIT = 0x0012
 WM_USER = 0x0400
 UPDATE_HOTKEYS_MSG = WM_USER + 1
 
+# Virtual-key codes for keys VkKeyScan does not accept as a one-char string.
+_VK_BY_NAME = {f"f{i}": 0x70 + (i - 1) for i in range(1, 13)}
+
+_DISALLOWED_MAIN_KEYS = frozenset(
+    {
+        "space",
+        "enter",
+        "return",
+        "tab",
+        "escape",
+        "esc",
+        "backspace",
+        "delete",
+        "insert",
+        "home",
+        "end",
+        "pageup",
+        "pagedown",
+        "up",
+        "down",
+        "left",
+        "right",
+        "printscreen",
+        "pause",
+        "capslock",
+        "numlock",
+        "scrolllock",
+    }
+    | {f"f{i}" for i in range(1, 13)}
+)
+
+
 def parse_hotkey(combo_str):
     """
     Parses a hotkey string like 'ctrl+shift+v' into (modifiers, vk_code).
@@ -40,15 +72,49 @@ def parse_hotkey(combo_str):
         elif part in ('win', 'windows'):
             modifiers |= MOD_WIN
         else:
-            # Try to get VK code from user32.VkKeyScanW
-            # VkKeyScanW returns the virtual-key code in the low-order byte
-            res = user32.VkKeyScanW(ord(part))
-            if res != -1:
-                vk = res & 0xFF
+            if part in _VK_BY_NAME:
+                vk = _VK_BY_NAME[part]
+                continue
+            if len(part) == 1:
+                res = user32.VkKeyScanW(ord(part))
+                if res != -1:
+                    vk = res & 0xFF
+                else:
+                    vk = ord(part.upper())
             else:
-                # Fallback for some keys if needed, but VkKeyScanW usually handles a-z, 0-9
-                vk = ord(part.upper())
+                logging.warning("Unknown hotkey segment: %s", part)
     return modifiers, vk
+
+
+def _main_key_part(combo_str: str) -> str | None:
+    if not combo_str:
+        return None
+    parts = [p.strip().lower() for p in combo_str.split("+") if p.strip()]
+    for part in parts:
+        if part not in ("ctrl", "control", "shift", "alt", "win", "windows"):
+            return part
+    return None
+
+
+def validate_hotkey_combo(combo_str: str) -> tuple[bool, str]:
+    """
+    Validate a combo string for RegisterHotKey.
+    Returns (ok, error_code) where error_code is one of:
+    empty, no_main_key, no_modifier, disallowed_key, unregistered_key.
+    """
+    if not combo_str or not str(combo_str).strip():
+        return False, "empty"
+    modifiers, vk = parse_hotkey(combo_str)
+    main = _main_key_part(combo_str)
+    if not main:
+        return False, "no_main_key"
+    if main in _DISALLOWED_MAIN_KEYS:
+        return False, "disallowed_key"
+    if modifiers == 0:
+        return False, "no_modifier"
+    if vk == 0:
+        return False, "unregistered_key"
+    return True, ""
 
 
 class HotkeyManager:
@@ -96,8 +162,11 @@ class HotkeyManager:
                 hk_id = msg.wParam
                 if hk_id in registered_hotkeys:
                     hk_config = registered_hotkeys[hk_id]
-                    # Invoke callback in a new thread so we don't block the message loop
-                    threading.Thread(target=self.on_hotkey_triggered, args=(hk_config,), daemon=True).start()
+                    # Callback spawns its own worker; keep message loop responsive.
+                    try:
+                        self.on_hotkey_triggered(hk_config)
+                    except Exception as e:
+                        logging.error("Hotkey callback failed: %s", e)
             
             elif msg.message == UPDATE_HOTKEYS_MSG:
                 # wparam 1 means register_all, wparam 0 means unregister_all

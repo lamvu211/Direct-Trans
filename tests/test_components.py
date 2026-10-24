@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 import tempfile
 import json
 
-from hotkey_manager import parse_hotkey, MOD_CONTROL, MOD_SHIFT, MOD_ALT, MOD_WIN
+from hotkey_manager import parse_hotkey, validate_hotkey_combo, MOD_CONTROL, MOD_SHIFT, MOD_ALT, MOD_WIN
 from font_mapper import FontMapper
 from config import Config
 
@@ -31,6 +31,12 @@ class TestComponents(unittest.TestCase):
         mod, vk = parse_hotkey(None)
         self.assertEqual(mod, 0)
         self.assertEqual(vk, 0)
+
+    def test_validate_hotkey_combo(self):
+        self.assertTrue(validate_hotkey_combo("ctrl+shift+v")[0])
+        self.assertFalse(validate_hotkey_combo("ctrl+shift+f1")[0])
+        self.assertFalse(validate_hotkey_combo("v")[0])
+        self.assertFalse(validate_hotkey_combo("ctrl+shift")[0])
 
     @patch('font_mapper.winreg')
     def test_font_mapper(self, mock_winreg):
@@ -89,6 +95,17 @@ class TestComponents(unittest.TestCase):
                 # Verify reload decrypts properly
                 cfg2 = Config()
                 self.assertEqual(cfg2.get_api_key('gemini'), 'secret_key_123')
+
+    def test_ui_theme_default(self):
+        with tempfile.TemporaryDirectory() as td:
+            cfg_path = os.path.join(td, 'test_config.json')
+            with patch('config.Config._resolve_config_path', return_value=cfg_path):
+                cfg = Config()
+                self.assertEqual(cfg.get_ui_theme(), 'midnight_gold')
+                cfg.set_ui_theme('aurora_glass')
+                self.assertEqual(cfg.get_ui_theme(), 'aurora_glass')
+                cfg2 = Config()
+                self.assertEqual(cfg2.get_ui_theme(), 'aurora_glass')
 
 if __name__ == '__main__':
     unittest.main()
