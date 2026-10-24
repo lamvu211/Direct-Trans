@@ -252,6 +252,24 @@ class TestUiQaFixes(unittest.TestCase):
             self.assertLessEqual(entry.geometry().bottom(), win.api_section.height())
             win.close()
 
+    def test_popup_centered_within_work_area(self):
+        """Popup uses Qt screen geometry so it stays centered under DPI scaling."""
+        popup = QtPopupWindow(config=self.config)
+        popup.show(translated_text="Sample", target_lang="English", target_lang_code="en")
+        self.app.processEvents()
+        win = popup.window
+        screen = QGuiApplication.screenAt(win.frameGeometry().center()) or QGuiApplication.primaryScreen()
+        self.assertIsNotNone(screen)
+        avail = screen.availableGeometry()
+        fg = win.frameGeometry()
+        self.assertGreaterEqual(fg.left(), avail.left())
+        self.assertGreaterEqual(fg.top(), avail.top())
+        self.assertLessEqual(fg.right(), avail.right() + 1)
+        self.assertLessEqual(fg.bottom(), avail.bottom() + 1)
+        self.assertAlmostEqual(fg.center().x(), avail.center().x(), delta=24)
+        self.assertAlmostEqual(fg.center().y(), avail.center().y(), delta=24)
+        popup.close()
+
     def test_popup_theme_combo_no_truncation_and_dropdown_qss(self):
         """Verify theme combo has adequate width without ellipsis and uses dropdown popup."""
         for tid in THEME_IDS:

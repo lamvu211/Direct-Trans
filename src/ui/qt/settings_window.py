@@ -320,7 +320,6 @@ class QtSettingsWindow(QWidget):
     def _on_theme_combo_changed(self, index: int):
         tid = self._theme_combo.itemData(index)
         if tid and tid != self.config.get_ui_theme():
-            self.set_theme(tid)
             self.config.set_ui_theme(tid)
 
     def set_theme(self, theme_id: str) -> None:

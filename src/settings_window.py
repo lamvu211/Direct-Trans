@@ -27,6 +27,11 @@ class SettingsWindow:
         if self._qt:
             self._qt.restore_and_focus()
 
+    def set_theme(self, theme_id: str) -> None:
+        """Apply theme to the live Settings window (combo + QSS)."""
+        if self._qt is not None:
+            self._qt.set_theme(theme_id)
+
     def show(self):
         ensure_qt_app()
         if self._qt is None:

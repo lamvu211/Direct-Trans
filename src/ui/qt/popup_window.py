@@ -9,7 +9,7 @@ import threading
 import time
 
 from PySide6.QtCore import Qt, QTimer, QPoint
-from PySide6.QtGui import QFont, QGuiApplication, QIcon, QColor, QPainter, QPen, QPixmap
+from PySide6.QtGui import QCursor, QFont, QGuiApplication, QIcon, QColor, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QApplication,
@@ -347,6 +347,8 @@ class QtPopupWindow:
         self.window = win
         QtPopupWindow.open_popups.append(self)
         win.show()
+        self._center_on_work_area(win)
+        QTimer.singleShot(0, lambda w=win: self._center_on_work_area(w))
         win.raise_()
         win.activateWindow()
 
@@ -377,6 +379,25 @@ class QtPopupWindow:
         new_size = min(36, self._current_font_size + 1)
         self._apply_output_style(self._current_font_color, new_size)
 
+    def sync_theme_display(self, theme_id: str) -> None:
+        """Refresh popup QSS, theme combo, and font defaults without writing config."""
+        if not theme_id or not self.window:
+            return
+        self.window.setStyleSheet(qss_for(theme_id))
+        if hasattr(self, "theme_combo") and self.theme_combo:
+            idx = self.theme_combo.findData(theme_id)
+            if idx >= 0 and self.theme_combo.currentIndex() != idx:
+                self.theme_combo.blockSignals(True)
+                self.theme_combo.setCurrentIndex(idx)
+                self.theme_combo.blockSignals(False)
+        popup_style = self.config.get_popup_style(theme_id) if self.config else {"color": "#B1B9E5", "size": 12}
+        self._current_font_color = popup_style.get("color", "#B1B9E5")
+        self._current_font_size = popup_style.get("size", 12)
+        self._apply_output_style(self._current_font_color, self._current_font_size, save=False)
+        if hasattr(self, "_color_picker") and self._color_picker:
+            self._color_picker.close()
+            self._color_picker = None
+
     def _on_theme_changed(self, index: int):
         if not hasattr(self, "theme_combo") or not self.theme_combo or not self.window:
             return
@@ -385,18 +406,8 @@ class QtPopupWindow:
             return
         if self.config:
             self.config.set_ui_theme(theme_id)
-        self.window.setStyleSheet(qss_for(theme_id))
-
-        # Tải style tương ứng cho theme mới
-        popup_style = self.config.get_popup_style(theme_id) if self.config else {"color": "#B1B9E5", "size": 12}
-        self._current_font_color = popup_style.get("color", "#B1B9E5")
-        self._current_font_size = popup_style.get("size", 12)
-        self._apply_output_style(self._current_font_color, self._current_font_size, save=False)
-
-        # Refresh color picker instance to match new theme
-        if hasattr(self, "_color_picker") and self._color_picker:
-            self._color_picker.close()
-            self._color_picker = None
+        else:
+            self.sync_theme_display(theme_id)
 
     def _open_color_picker(self):
         if not self.color_btn or not self.window:
@@ -427,25 +438,36 @@ class QtPopupWindow:
             return common_langs[ui_lang][target_lang_code]
         return target_lang
 
-    def _place_on_monitor(self, win: QWidget):
-        try:
-            import win32api
-            import win32con
+    def _screen_at_cursor(self):
+        pos = QCursor.pos()
+        return QGuiApplication.screenAt(pos) or QGuiApplication.primaryScreen()
 
-            mx, my = win32api.GetCursorPos()
-            monitor = win32api.MonitorFromPoint((mx, my), win32con.MONITOR_DEFAULTTONEAREST)
-            monitor_info = win32api.GetMonitorInfo(monitor)
-            work_area = monitor_info["Work"]
-            m_left, m_top, m_right, m_bottom = work_area
-            # Balanced popup dimensions: increased 50% (540x280 -> 810x420)
-            popup_w = min(1020, max(720, int((m_right - m_left) * 0.45)))
-            popup_h = min(740, max(507, int((m_bottom - m_top) * 0.50)))
-            pos_x = m_left + (m_right - m_left - popup_w) // 2
-            pos_y = m_top + (m_bottom - m_top - popup_h) // 2
-            win.setGeometry(pos_x, pos_y, popup_w, popup_h)
-        except Exception as e:
-            logging.error("Failed to center popup using Win32 API: %s", e)
+    def _popup_dimensions(self, avail_w: int, avail_h: int) -> tuple[int, int]:
+        popup_w = min(1020, max(720, int(avail_w * 0.45)))
+        popup_h = min(740, max(507, int(avail_h * 0.50)))
+        return popup_w, popup_h
+
+    def _place_on_monitor(self, win: QWidget):
+        """Size popup from Qt work area (DIPs) — matches setGeometry/move under DPI scaling."""
+        screen = self._screen_at_cursor()
+        if screen is None:
             win.resize(810, 546)
+            return
+        avail = screen.availableGeometry()
+        popup_w, popup_h = self._popup_dimensions(avail.width(), avail.height())
+        win.resize(popup_w, popup_h)
+
+    def _center_on_work_area(self, win: QWidget):
+        """Center after show() so frameGeometry includes decorations and layout is applied."""
+        screen = QGuiApplication.screenAt(win.frameGeometry().center()) or self._screen_at_cursor()
+        if screen is None:
+            return
+        avail = screen.availableGeometry()
+        fg = win.frameGeometry()
+        fg.moveCenter(avail.center())
+        x = max(avail.left(), min(fg.x(), avail.right() - fg.width() + 1))
+        y = max(avail.top(), min(fg.y(), avail.bottom() - fg.height() + 1))
+        win.move(x, y)
 
     def _is_alive(self) -> bool:
         return self.window is not None and self.window.isVisible()

@@ -2,6 +2,13 @@
 echo === DirectTrans Build ===
 echo.
 
+REM Stop running DirectTrans instances so dist\*.exe is not locked (WinError 5)
+echo Stopping any running DirectTrans processes...
+taskkill /F /IM DirectTrans_v2.0.1.exe >nul 2>&1
+taskkill /F /IM DirectTrans.exe >nul 2>&1
+powershell -NoProfile -Command "Get-Process -Name 'DirectTrans*' -ErrorAction SilentlyContinue | Stop-Process -Force" >nul 2>&1
+timeout /t 2 /nobreak >nul
+
 REM Install dependencies
 pip install -r requirements.txt
 pip install pyinstaller

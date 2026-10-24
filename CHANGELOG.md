@@ -2,7 +2,7 @@
 
 ## v2.0.1
 - **Security**: Gemini API key via `x-goog-api-key`; sanitize API error messages before logs/UI.
-- **Single instance**: Mutex acquired before killing stale sibling processes; no longer delete `directtrans.signal` on kill.
+- **Single instance**: Packaged exe kills stale `DirectTrans*` processes **before** acquiring the mutex (avoids waking the old exe via `directtrans.signal`).
 - **Google Free**: HTTP POST form body (avoids HTTP 414); smaller chunks.
 - **RTF / clipboard**: Latin-1 RTF I/O, signed `\u` escapes, proportional inline token replacement; 400ms delay before clipboard restore after replace.
 - **Theme**: `Config._theme_listener` syncs popup theme changes to open Settings (`set_theme`).

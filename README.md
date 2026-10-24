@@ -126,7 +126,9 @@ PyInstaller spec: `DirectTrans.spec` (icon, assets, versioned output name).
 .\build.bat
 ```
 
-Artifact: `dist\DirectTrans_v2.0.0.exe`. Close any running DirectTrans process if the build reports a file lock.
+`build.bat` stops any running `DirectTrans*` process before PyInstaller runs (avoids `Access is denied` when overwriting `dist\*.exe`).
+
+Artifact: `dist\DirectTrans_v2.0.1.exe` (name matches `DirectTrans.spec`).
 
 ---
 

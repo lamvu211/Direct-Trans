@@ -155,6 +155,8 @@ class Config:
 
         if theme_id not in THEME_IDS:
             return
+        if self.data.get("ui_theme") == theme_id:
+            return
         self.data["ui_theme"] = theme_id
         self.save()
         listener = getattr(self, "_theme_listener", None)

@@ -43,87 +43,70 @@ if getattr(sys, 'frozen', False):
         sys.stderr = DummyWriter()
 
 def kill_old_processes():
-    """Kill any existing DirectTrans.exe processes (old versions or stale autostart instances).
-    This ensures the new version always takes over cleanly.
-    Waits for processes to fully terminate before returning.
-    """
+    """Kill other DirectTrans* processes so a newly launched exe can take over."""
+    from process_util import kill_other_directtrans_processes
+
     try:
-        from subprocess_util import run_hidden
-        current_pid = os.getpid()
+        kill_other_directtrans_processes(exclude_pid=os.getpid(), wait_seconds=3.0)
+    except Exception as e:
+        logging.warning("kill_old_processes failed: %s", e)
 
-        # List ALL processes, then filter for any exe starting with "DirectTrans"
-        # This catches versioned names like DirectTrans_v1.0.4.exe
-        result = run_hidden(
-            ['tasklist', '/FO', 'CSV', '/NH'],
-            capture_output=True, text=True, timeout=5
-        )
-        killed_any = False
-        for line in result.stdout.strip().split('\n'):
-            if not line.strip():
-                continue
-            parts = line.strip('"').split('","')
-            if len(parts) >= 2:
-                proc_name = parts[0].strip('"').lower()
-                if not proc_name.startswith('directtrans'):
-                    continue
-                try:
-                    pid = int(parts[1].strip('"'))
-                    if pid != current_pid:
-                        run_hidden(['taskkill', '/PID', str(pid), '/F'],
-                                   capture_output=True, timeout=5)
-                        killed_any = True
-                except (ValueError, OSError):
-                    pass
 
-        # Wait for killed processes to fully terminate (up to 3 seconds)
-        if killed_any:
-            import time
-            for _ in range(30):
-                time.sleep(0.1)
-                check = run_hidden(
-                    ['tasklist', '/FO', 'CSV', '/NH'],
-                    capture_output=True, text=True, timeout=5
-                )
-                still_alive = False
-                for line in check.stdout.strip().split('\n'):
-                    if not line.strip() or 'INFO' in line.upper():
-                        continue
-                    parts = line.strip('"').split('","')
-                    if len(parts) >= 2:
-                        proc_name = parts[0].strip('"').lower()
-                        if not proc_name.startswith('directtrans'):
-                            continue
-                        try:
-                            pid = int(parts[1].strip('"'))
-                            if pid != current_pid:
-                                still_alive = True
-                        except ValueError:
-                            pass
-                if not still_alive:
-                    break
+def _discard_startup_signal_file() -> None:
+    """Remove stale single-instance signal without opening Settings."""
+    signal_file = os.path.join(LOG_DIR, "directtrans.signal")
+    try:
+        if os.path.exists(signal_file):
+            os.remove(signal_file)
+    except OSError as e:
+        logging.debug("Could not remove signal file: %s", e)
+
+
+def _signal_existing_instance_and_exit() -> None:
+    """Second instance (dev): ask the running copy to show Settings, then exit."""
+    _boot_trace("boot: check_single_instance another instance, exiting")
+    signal_file = os.path.join(LOG_DIR, "directtrans.signal")
+    try:
+        with open(signal_file, "w", encoding="utf-8") as f:
+            f.write("SHOW")
+    except OSError:
+        pass
+    try:
+        win32api.CloseHandle(sys.app_mutex)
     except Exception:
         pass
-    
+    sys.exit(0)
+
+
 def check_single_instance():
-    """Checks if another instance is running using a Windows Mutex.
-    If yes, writes a signal file to restore the existing instance and exits.
-    """
+    """Single-instance mutex. Packaged exe kills stale processes instead of signaling them."""
     _boot_trace("boot: check_single_instance enter")
     sys.app_mutex = win32event.CreateMutex(None, 1, "DirectTrans_SingleInstance_Mutex")
     err = win32api.GetLastError()
     _boot_trace(f"boot: check_single_instance GetLastError={err}")
     if err == winerror.ERROR_ALREADY_EXISTS or err == winerror.ERROR_ACCESS_DENIED:
-        _boot_trace("boot: check_single_instance another instance, exiting")
-        # First instance is already running! Write a signal file
-        signal_file = os.path.join(LOG_DIR, 'directtrans.signal')
-        try:
-            with open(signal_file, 'w', encoding='utf-8') as f:
-                f.write('SHOW')
-        except Exception:
-            pass
-        # Close mutex handle and exit
-        win32api.CloseHandle(sys.app_mutex)
-        sys.exit(0)
+        if getattr(sys, "frozen", False):
+            logging.warning("Mutex still held; retrying stale DirectTrans cleanup")
+            kill_old_processes()
+            try:
+                win32api.CloseHandle(sys.app_mutex)
+            except Exception:
+                pass
+            sys.app_mutex = win32event.CreateMutex(None, 1, "DirectTrans_SingleInstance_Mutex")
+            err = win32api.GetLastError()
+            _boot_trace(f"boot: check_single_instance retry GetLastError={err}")
+            if err not in (winerror.ERROR_ALREADY_EXISTS, winerror.ERROR_ACCESS_DENIED):
+                _discard_startup_signal_file()
+                _boot_trace("boot: check_single_instance acquired mutex after retry")
+                return
+            logging.error("Cannot start: another DirectTrans instance is still running")
+            try:
+                win32api.CloseHandle(sys.app_mutex)
+            except Exception:
+                pass
+            sys.exit(1)
+        _signal_existing_instance_and_exit()
+    _discard_startup_signal_file()
     _boot_trace("boot: check_single_instance acquired mutex")
 
 import logging.handlers
@@ -172,12 +155,32 @@ class DirectTransApp:
         self.config._theme_listener = self._on_ui_theme_changed
 
     def _on_ui_theme_changed(self, theme_id: str):
-        settings = getattr(self, "settings_window", None)
-        if settings is not None and hasattr(settings, "set_theme"):
+        """Keep Settings and any open translation popups in sync with config.ui_theme."""
+
+        def apply_theme_ui():
+            settings = getattr(self, "settings_window", None)
+            if settings is not None and settings.is_open():
+                try:
+                    settings.set_theme(theme_id)
+                except Exception:
+                    logging.exception("Failed to sync theme to Settings")
+
             try:
-                settings.set_theme(theme_id)
+                from ui.qt.popup_window import QtPopupWindow
+
+                for popup in list(QtPopupWindow.open_popups):
+                    try:
+                        popup.sync_theme_display(theme_id)
+                    except Exception:
+                        logging.exception("Failed to sync theme to popup")
             except Exception:
                 pass
+
+        run_on_main = getattr(self, "_run_on_main", None)
+        if run_on_main:
+            run_on_main(apply_theme_ui)
+        else:
+            apply_theme_ui()
 
     def run(self):
         """Start the application on the main thread."""
@@ -564,12 +567,13 @@ class DirectTransApp:
 
 
 if __name__ == '__main__':
-    check_single_instance()
-    _boot_trace("boot: after check_single_instance")
-    if getattr(sys, 'frozen', False):
+    # Kill before mutex: otherwise the new exe exits and sends SHOW to the old one.
+    if getattr(sys, "frozen", False):
         _boot_trace("boot: before kill_old_processes")
         kill_old_processes()
         _boot_trace("boot: after kill_old_processes")
+    check_single_instance()
+    _boot_trace("boot: after check_single_instance")
 
     app = DirectTransApp()
     app.run()
