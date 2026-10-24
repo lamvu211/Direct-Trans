@@ -7,7 +7,7 @@ echo Stopping any running DirectTrans processes...
 taskkill /F /IM DirectTrans_v2.0.1.exe >nul 2>&1
 taskkill /F /IM DirectTrans.exe >nul 2>&1
 powershell -NoProfile -Command "Get-Process -Name 'DirectTrans*' -ErrorAction SilentlyContinue | Stop-Process -Force" >nul 2>&1
-timeout /t 2 /nobreak >nul
+ping -n 3 127.0.0.1 >nul
 
 REM Install dependencies
 pip install -r requirements.txt

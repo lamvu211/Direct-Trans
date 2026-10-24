@@ -1,172 +1,98 @@
-# Direct-Trans
+# DirectTrans
 
-**Direct-Trans** is a lightweight, high-performance, and non-intrusive AI-powered translation utility built specifically for Windows. Operating quietly in the system tray, it registers global system hotkeys to capture selected text from any active application, translate it via state-of-the-art AI backends, and either display the output in an elegant popup window or directly replace the selected text while preserving the original layout and formatting (RTF).
-
-**Current version:** v2.0.0 (`DirectTrans_v2.0.0.exe`)
+Ứng dụng Windows chạy nền (khay hệ thống): chọn văn bản trong bất kỳ app nào, nhấn phím tắt toàn cục để dịch qua AI hoặc Google Translate, hiển thị popup hoặc thay thế trực tiếp đoạn đã chọn (có hỗ trợ RTF).
 
 ---
 
-## Key Features
+## Cài đặt (file exe)
 
-- **Format-Preserving Direct Replacement (`replace` mode):** Translates selected text and replaces it in-place (simulating paste). Unlike naive text replacers, Direct-Trans tokenizes and manipulates **Rich Text Format (RTF)** bytes, preserving styles like colors, bold, and italic, while dynamically mapping appropriate fonts for CJK, Indic, Arabic, or Cyrillic target languages using the Windows Registry.
-- **Advanced API Backend & Fallback Chain:**
-  - Integrates with **Gemini API** (default: `gemini-flash-lite-latest`), **Groq API**, and **Mistral API** (default: `codestral-latest`).
-  - **Google Translate (Free)** serves as a robust built-in fallback.
-  - An **automatic fallback chain** (built-in order; no user configuration) retries other providers if your primary fails (network issues or API limits), without interrupting your workflow.
-- **Reasoning/CoT Filtering:** Automatically parses and strips `<think>...</think>` tags from output (typical for models like DeepSeek-R1 or Qwen-Cot), ensuring only clean translations are delivered.
-- **PySide6 settings & popup (v2.0):** All-in-one Settings with three QSS themes (**Midnight Gold**, **Aurora Glass**, **Rose Champagne**), scrollable content area, API key toolbar with test/save status, and hotkey list with manage dialog. Translation popup shows loading state, provider used (including fallback), and safe Copy/Replace behavior.
-- **Robust Windows System Integration:**
-  - **Zero-Dependency Global Hotkeys:** Built on native Windows `RegisterHotKey` APIs via `ctypes` instead of heavy external keyboard hook libraries. It runs a dedicated background message loop to guarantee responsive hotkey triggers without interfering with native applications.
-  - **Modifier Recovery:** Programmatically releases stuck modifier keys (Shift, Ctrl, Alt, Win) when triggering hotkeys to prevent application-stuck key states on rapid use.
-  - **Single-Instance Enforcement:** Uses a Windows System Mutex coupled with a filesystem signal watch (`directtrans.signal`). Attempting to launch a second instance instantly focus-restores the existing instance's settings window.
-  - **Auto-Start Registry Management:** Easily configures the app to run on Windows startup using native registry entries (`HKCU\...\Run`).
-- **Multilingual UI:** Tray menu, Settings, dialogs, and popup are localized in **Vietnamese, English, Korean, Chinese, and Japanese**.
+1. Tải `DirectTrans_v*.exe` từ [Releases](https://github.com/lamvu211/Direct-Trans/releases) (hoặc thư mục `dist` sau khi build).
+2. Đặt file ở vị trí cố định (ví dụ `C:\Apps\DirectTrans\`).
+3. Chạy lần đầu — cửa sổ **Cài đặt** mở tự động; cấu hình API key và phím tắt (xem **Hướng dẫn sử dụng** trong app).
+4. App thu nhỏ về **khay hệ thống**. Double-click icon khay hoặc chuột phải → **Cài đặt** để mở lại Settings.
+5. Cấu hình lưu cạnh file exe (`config.json`); log: `directtrans.log`.
+
+> Chạy bản exe mới khi bản cũ còn mở: bản cũ sẽ được tắt để bản mới tiếp quản (cùng một instance).
 
 ---
 
-## Technical Architecture
+## Giao diện cơ bản
 
-Direct-Trans is organized into decoupled modules under the `src/` directory:
+### Cài đặt (Settings)
 
-| Module | Role |
-|--------|------|
-| `main.py` | Entry point: single-instance mutex, **PySide6** `QApplication` loop, coordinates threads and startup. |
-| `constants.py` | Modes, provider IDs, fallback order, `APP_VERSION`. |
-| `config.py` | `config.json`, DPAPI-encrypted API keys, hotkeys, theme, update snooze. |
-| `tray.py` | System tray (`pystray`) on a background thread. |
-| `hotkey_manager.py` | Native Windows hotkeys (`user32` message loop). |
-| `clipboard_util.py` | Clipboard backup, RTF-aware replace. |
-| `translator.py` | Gemini, Groq, Mistral, Google Free + fallback manager. |
-| `font_mapper.py` | Windows font resolution for target languages. |
-| `settings_window.py` | Thin facade → `ui/qt/settings_window.py`. |
-| `popup_window.py` | Thin facade → `ui/qt/popup_window.py`. |
-| `ui/qt/` | Settings, popup, themes (`theme.py`), API/hotkey sections, updater dialog, main-thread `dispatch.py`. |
-| `ui/i18n.py` | Translations and provider/language lists. |
-| `ui/dpi_util.py` | Scaled window sizes for high-DPI monitors. |
+Một màn hình: ngôn ngữ UI, theme, nguồn dịch (provider), API key & model, phím tắt, tùy chọn khởi động Windows / cập nhật.
 
-Design choices that look like bugs but are intentional (exe kills older `DirectTrans*` processes, model name reset on exe launch, fixed fallback order) are documented in [`REVIEW_INTENT.md`](REVIEW_INTENT.md). Known open issues are in [`issue.md`](issue.md).
+![Giao diện Cài đặt](src/assets/screenshot_settings.png)
+
+### Popup dịch
+
+Hiện sau phím tắt chế độ **Popup**: nội dung dịch, theme, cỡ/màu chữ, **Copy** / **Replace**.
+
+![Popup dịch](src/assets/screenshot_popup.png)
+
+### Khay hệ thống
+
+Menu: bật/tắt dịch tạm thời, mở Cài đặt, Thoát.
 
 ---
 
-## Setup & Local Run
+## Cách dùng nhanh
 
-### Prerequisites
-- **Windows OS** (win32 / ctypes APIs)
-- **Python 3.10+**
+1. **Bôi chọn** văn bản trong Word, browser, chat, …
+2. Nhấn **phím tắt** đã gán (mặc định thường có Popup → Việt / Anh).
+3. **Popup:** đọc kết quả, Copy hoặc Replace. **Replace (hotkey):** thay trực tiếp không qua popup.
 
-### Installation
-
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/lamvu211/Direct-Trans.git
-   cd Direct-Trans
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
-   Includes `PySide6`, `pystray`, `Pillow`, `keyboard` (hotkey capture in Settings dialogs only), `pywin32`, and `requests`.
-
-3. **Run the application:**
-   - Console (debugging):
-     ```bash
-     python src/main.py
-     ```
-   - Background (no console):
-     ```bash
-     pythonw src/main.py
-     ```
-
-4. **Configuration:**
-   - Packaged **`.exe`**: Settings opens on every launch; Gemini/Groq/Mistral **model names** reset to built-in defaults each run (API keys are kept).
-   - Dev mode: Settings opens on first run or when the primary provider (other than Google Free) has no API key.
-   - Re-open Settings: double-click the tray icon or **Settings** in the tray menu.
-   - **Feedback** in Settings emails a report with `directtrans.log` attached (Outlook preferred; otherwise mailto with the log path).
-   - Config path: `%APPDATA%\DirectTrans\config.json` in dev, or next to the executable when frozen.
+Chi tiết API key, Test/Save key, quản lý phím tắt, tùy chọn popup: mở **User manual** trong Settings hoặc file `src/assets/user_manual.html`.
 
 ---
 
-## Default Key Shortcuts
+## Cấu trúc dự án (dev)
 
-On first run, two hotkeys are created:
-
-| Shortcut | Target | Mode |
-|----------|--------|------|
-| `Ctrl + Shift + V` | Vietnamese | Popup |
-| `Ctrl + Shift + E` | English | Popup |
-
-Add, edit (double-click a row), or delete hotkeys in Settings; use **Show more** when you have more than three. Modes: **popup** or **replace**.
-
----
-
-## Running Tests
-
-```bash
-python -m pytest tests/ -q
+```text
+direct-trans/
+├── src/
+│   ├── main.py              # Entry, tray + Qt loop, hotkeys
+│   ├── config.py            # config.json, API keys (DPAPI)
+│   ├── translator.py        # Gemini, Groq, Mistral, Google Free
+│   ├── hotkey_manager.py    # RegisterHotKey (Windows)
+│   ├── clipboard_util.py    # Copy / replace RTF
+│   ├── process_util.py      # Kill stale DirectTrans processes
+│   ├── assets/              # icon, user_manual.html, screenshots
+│   └── ui/qt/               # Settings, popup, themes, dialogs
+├── tests/
+├── scripts/                 # capture_manual_assets.py, UI screenshots
+├── DirectTrans.spec         # PyInstaller
+├── build.bat
+└── requirements.txt
 ```
 
-CI also runs `python -m unittest discover -s tests -v` on Windows (Python 3.10–3.12). Tests cover translators, fallback chain, hotkeys, config, RTF, and Qt UI regressions.
-
-Optional UI screenshots:
+### Chạy từ source
 
 ```bash
-python scripts/capture_ui_screenshots.py
+pip install -r requirements.txt
+python src/main.py
 ```
 
-Output: `docs/ui-review/screenshots/`.
-
----
-
-## Building Standalone Executable
-
-PyInstaller spec: `DirectTrans.spec` (icon, assets, versioned output name).
+### Build exe
 
 ```cmd
 .\build.bat
 ```
 
-`build.bat` stops any running `DirectTrans*` process before PyInstaller runs (avoids `Access is denied` when overwriting `dist\*.exe`).
+### Tests
 
-Artifact: `dist\DirectTrans_v2.0.1.exe` (name matches `DirectTrans.spec`).
+```bash
+python -m pytest tests/ -q
+```
 
----
+Ảnh cho tài liệu (Settings, popup, hotkey):
 
-## Project Structure
-
-```text
-Direct-Trans/
-├── src/
-│   ├── assets/              # Icons, logo, user_manual.html
-│   ├── ui/
-│   │   ├── qt/              # PySide6 UI (settings, popup, themes)
-│   │   ├── i18n.py
-│   │   └── dpi_util.py
-│   ├── main.py
-│   ├── constants.py
-│   ├── config.py
-│   ├── tray.py
-│   ├── hotkey_manager.py
-│   ├── clipboard_util.py
-│   ├── translator.py
-│   ├── font_mapper.py
-│   ├── settings_window.py   # Facade
-│   └── popup_window.py      # Facade
-├── tests/
-├── scripts/                 # e.g. capture_ui_screenshots.py
-├── samples/settings_pyside6/  # Early Qt prototypes (optional)
-├── .github/workflows/       # CI
-├── DirectTrans.spec
-├── build.bat
-├── requirements.txt
-├── CHANGELOG.md
-├── issue.md                 # Known open issues
-├── REVIEW_INTENT.md         # Intentional product behavior
-└── README.md
+```bash
+python scripts/capture_manual_assets.py
 ```
 
 ---
 
 ## License
 
-This project is open-sourced under the [MIT License](LICENSE).
+[MIT License](LICENSE)

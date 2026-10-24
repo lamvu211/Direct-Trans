@@ -9,9 +9,18 @@ __pycache__/
 *.egg-info/
 .pytest_cache/
 
-# Runtime
+# Runtime / local
 *.log
+directtrans.log.*
 directtrans.signal
+boot_trace.txt
+
+# Debug / scratch at repo root
+_*.txt
+*_extracted/
+
+# Reverse-engineering / one-off tools (not shipped)
+tools/
 
 # Debug artifacts
 ppt_clipboard.rtf

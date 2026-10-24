@@ -3,303 +3,337 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DirectTrans - Hướng dẫn sử dụng</title>
+    <title>DirectTrans — Hướng dẫn sử dụng</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-
         :root {
-            --base: #faf9f5;
-            --mantle: #efe9de;
-            --surface: #f5f0e8;
-            --border: #e6dfd8;
-            --ink: #141413;
-            --muted: #6c6a64;
-            --coral: #cc785c;
-            --coral-active: #a9583e;
-            --teal: #5db8a6;
-            --pass-color: #5db872;
-            --fail-color: #c64545;
-            --note-bg: #fff8e6;
-            --note-border: #e6c200;
+            --bg: #f4f2ee;
+            --paper: #fff;
+            --ink: #1a1a18;
+            --muted: #6b6860;
+            --accent: #b85c38;
+            --accent-soft: #f0e6df;
+            --border: #e0dbd3;
+            --ok: #2d8a4e;
+            --bad: #c0392b;
+            --sidebar-w: 220px;
         }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
         body {
-            background-color: var(--base);
-            color: var(--ink);
-            line-height: 1.65;
-            padding: 40px 20px;
-            font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-
-        .container {
-            max-width: 1400px;
-            width: 95%;
-            margin: 0 auto;
-            background-color: #ffffff;
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 40px;
-            box-shadow: 0 4px 24px rgba(20, 20, 19, 0.05);
-        }
-
-        header {
-            display: flex;
-            align-items: center;
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 24px;
-            margin-bottom: 32px;
-        }
-
-        .logo {
-            width: 52px;
-            height: 52px;
-            margin-right: 18px;
-        }
-
-        h1 {
-            font-size: 32px;
-            font-weight: 700;
-        }
-
-        .subtitle {
-            color: var(--muted);
-            font-size: 14px;
-            margin-top: 4px;
-        }
-
-        h2 {
-            font-size: 22px;
-            color: var(--coral);
-            margin-top: 40px;
-            margin-bottom: 16px;
-            border-left: 4px solid var(--coral);
-            padding-left: 12px;
-        }
-
-        h3 {
-            font-size: 17px;
-            margin-top: 20px;
-            margin-bottom: 10px;
-            color: var(--ink);
-        }
-
-        p {
-            margin-bottom: 16px;
-            color: #3d3d3a;
-        }
-
-        a {
-            color: var(--coral);
-            text-decoration: none;
-            font-weight: 600;
-            border-bottom: 1px dashed var(--coral);
-        }
-
-        a:hover {
-            color: var(--coral-active);
-            border-bottom-style: solid;
-        }
-
-        ul, ol {
-            margin-bottom: 20px;
-            padding-left: 24px;
-        }
-
-        li {
-            margin-bottom: 8px;
-            color: #3d3d3a;
-        }
-
-        .highlight {
-            font-weight: bold;
-            color: var(--ink);
-        }
-
-        .shortcut {
-            background-color: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: 4px;
-            padding: 2px 6px;
-            font-family: monospace;
+            font-family: "Segoe UI", system-ui, sans-serif;
             font-size: 13px;
-        }
-
-        .step-header {
-            display: flex;
-            align-items: center;
-            font-weight: bold;
-            margin-top: 24px;
-            margin-bottom: 10px;
-            font-size: 16px;
-        }
-
-        .step-num {
-            display: inline-block;
-            background-color: var(--coral);
-            color: white;
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            text-align: center;
-            line-height: 24px;
-            font-size: 12px;
-            font-weight: bold;
-            margin-right: 8px;
-            flex-shrink: 0;
-        }
-
-        .note {
-            background-color: var(--note-bg);
-            border: 1px solid var(--note-border);
-            border-radius: 8px;
-            padding: 14px 18px;
-            margin: 16px 0 20px;
-            font-size: 14px;
-            color: #3d3d3a;
-        }
-
-        .note strong {
+            line-height: 1.45;
             color: var(--ink);
+            background: var(--bg);
         }
-
-        .graphic-container {
-            margin: 16px 0;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            overflow: hidden;
-            background-color: #ffffff;
-            display: inline-block;
+        .shell {
+            display: grid;
+            grid-template-columns: var(--sidebar-w) 1fr;
+            min-height: 100vh;
+            max-width: 1280px;
+            margin: 0 auto;
+            background: var(--paper);
+            border-left: 1px solid var(--border);
+            border-right: 1px solid var(--border);
         }
-
-        .app-screenshot {
+        .toc {
+            position: sticky;
+            top: 0;
+            align-self: start;
+            max-height: 100vh;
+            overflow-y: auto;
+            padding: 14px 10px 24px;
+            border-right: 1px solid var(--border);
+            background: #faf8f5;
+        }
+        .toc-brand {
+            font-weight: 700;
+            font-size: 15px;
+            padding: 4px 8px 10px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 8px;
+        }
+        .toc small { display: block; color: var(--muted); font-weight: 400; font-size: 11px; margin-top: 2px; }
+        .toc a {
             display: block;
-            max-width: 100%;
-            height: auto;
-        }
-
-        footer {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid var(--border);
-            text-align: center;
-            color: var(--muted);
+            padding: 5px 8px;
+            color: var(--ink);
+            text-decoration: none;
+            border-radius: 4px;
             font-size: 12px;
+        }
+        .toc a:hover, .toc a:focus { background: var(--accent-soft); color: var(--accent); }
+        .toc .sub { padding-left: 14px; font-size: 11px; color: var(--muted); }
+        main { padding: 16px 20px 32px; min-width: 0; }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        .lead { color: var(--muted); margin-bottom: 16px; font-size: 12px; }
+        h2 {
+            font-size: 15px;
+            margin: 20px 0 8px;
+            padding-bottom: 4px;
+            border-bottom: 2px solid var(--accent-soft);
+            color: var(--accent);
+        }
+        h3 { font-size: 13px; margin: 12px 0 6px; }
+        p, ul, ol { margin-bottom: 8px; }
+        ul, ol { padding-left: 18px; }
+        li { margin-bottom: 3px; }
+        a { color: var(--accent); }
+        kbd, .kbd {
+            background: #eeeae4;
+            border: 1px solid var(--border);
+            border-radius: 3px;
+            padding: 1px 5px;
+            font-family: Consolas, monospace;
+            font-size: 11px;
+        }
+        .grid2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin: 8px 0 12px;
+        }
+        @media (max-width: 900px) {
+            .shell { grid-template-columns: 1fr; }
+            .toc { position: relative; max-height: none; border-right: none; border-bottom: 1px solid var(--border); }
+            .grid2 { grid-template-columns: 1fr; }
+        }
+        .card {
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 8px 10px;
+            background: #fdfcfa;
+            font-size: 12px;
+        }
+        .card strong { display: block; margin-bottom: 4px; font-size: 12px; }
+        .note {
+            background: #fff8e6;
+            border: 1px solid #e6d48a;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 12px;
+            margin: 8px 0;
+        }
+        table.compact {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin: 8px 0 12px;
+        }
+        table.compact th, table.compact td {
+            border: 1px solid var(--border);
+            padding: 5px 8px;
+            text-align: left;
+        }
+        table.compact th { background: #f5f0ea; }
+        .pass { color: var(--ok); font-weight: 600; }
+        .fail { color: var(--bad); font-weight: 600; }
+        figure {
+            margin: 10px 0 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+            background: #fff;
+        }
+        figure img { display: block; width: 100%; height: auto; }
+        figcaption {
+            padding: 6px 8px;
+            font-size: 11px;
+            color: var(--muted);
+            background: #faf8f5;
+            border-top: 1px solid var(--border);
+        }
+        .steps { counter-reset: st; list-style: none; padding-left: 0; }
+        .steps li {
+            counter-increment: st;
+            padding-left: 26px;
+            position: relative;
+            margin-bottom: 6px;
+        }
+        .steps li::before {
+            content: counter(st);
+            position: absolute;
+            left: 0;
+            width: 18px;
+            height: 18px;
+            background: var(--accent);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            text-align: center;
+            line-height: 18px;
+            border-radius: 50%;
+        }
+        footer {
+            margin-top: 24px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            font-size: 11px;
+            color: var(--muted);
+            text-align: center;
         }
     </style>
 </head>
 <body>
-
-<div class="container">
-    <header>
-        <svg class="logo" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M128 32L210 100L170 190L128 150L86 190L46 100L128 32Z" fill="#cc785c"/>
-            <path d="M128 32L170 190L128 150L128 32Z" fill="#a9583e"/>
-            <path d="M128 150L210 100L170 190L128 150Z" fill="#e8a55a"/>
-            <path d="M128 150L46 100L86 190L128 150Z" fill="#efe9de"/>
-        </svg>
-        <div>
-            <h1>DirectTrans</h1>
-            <div class="subtitle">Tiện ích dịch văn bản &amp; phím tắt toàn hệ thống cho Windows (hướng dẫn v1.0.12)</div>
-        </div>
-    </header>
+<div class="shell">
+    <nav class="toc" aria-label="Mục lục">
+        <div class="toc-brand">DirectTrans<small>Hướng dẫn người dùng</small></div>
+        <a href="#bat-dau">1. Bắt đầu</a>
+        <a href="#cai-dat">2. Cài đặt exe</a>
+        <a href="#api-key" class="sub">Lấy API key</a>
+        <a href="#settings">3. Cài đặt trong Settings</a>
+        <a href="#settings-api" class="sub">API &amp; model</a>
+        <a href="#hotkeys">4. Phím tắt</a>
+        <a href="#popup">5. Popup dịch</a>
+        <a href="#tuy-chon">6. Tùy chọn &amp; khay</a>
+        <a href="#su-co">7. Xử lý sự cố</a>
+    </nav>
 
     <main>
-        <h2>1. Tổng quan</h2>
-        <p>DirectTrans chạy nền trên khay hệ thống (system tray). Bạn chọn văn bản trong bất kỳ ứng dụng nào, nhấn phím tắt đã cấu hình để dịch sang ngôn ngữ đích.</p>
-        <p>Ứng dụng hỗ trợ <strong>bốn nguồn dịch</strong>:</p>
+        <h1>Hướng dẫn sử dụng DirectTrans</h1>
+        <p class="lead">Tài liệu offline — mở từ nút <strong>User manual</strong> trong Cài đặt hoặc file <code>user_manual.html</code> trong thư mục assets.</p>
+
+        <h2 id="bat-dau">1. Bắt đầu</h2>
+        <p>DirectTrans chạy nền trên <strong>khay hệ thống</strong>. Luồng làm việc chuẩn:</p>
+        <ol class="steps">
+            <li>Bôi chọn văn bản trong ứng dụng bất kỳ (trình duyệt, Word, Teams, …).</li>
+            <li>Nhấn <strong>phím tắt toàn hệ thống</strong> đã cấu hình.</li>
+            <li><strong>Popup</strong> — xem bản dịch, Copy hoặc Replace. <strong>Replace</strong> (hotkey) — thay trực tiếp, không mở popup.</li>
+        </ol>
+        <div class="grid2">
+            <div class="card">
+                <strong>Nguồn dịch</strong>
+                Google Free (không key), Gemini, Groq, Mistral. Chọn provider chính trong Settings; nếu lỗi mạng/hạn mức, app tự thử nguồn dự phòng theo thứ tự cố định.
+            </div>
+            <div class="card">
+                <strong>Ngôn ngữ giao diện</strong>
+                Tiếng Việt, English, 한국어, 中文, 日本語 — đổi ở header Settings; nhãn và font UI cập nhật ngay.
+            </div>
+        </div>
+
+        <h2 id="cai-dat">2. Cài đặt file exe</h2>
         <ul>
-            <li><strong>Google Free</strong> — không cần API key (phù hợp dùng thử hoặc làm dự phòng).</li>
-            <li><strong>Gemini</strong>, <strong>GroqCloud</strong>, <strong>Mistral</strong> — cần API key; chất lượng dịch thường tốt hơn, tùy model.</li>
-        </ul>
-        <p>Chọn <span class="highlight">Provider</span> chính trong Cài đặt.</p>
-
-        <h2>2. Lấy API key</h2>
-        <p>Đăng ký và tạo key tại nhà cung cấp bạn dùng:</p>
-        <ul>
-            <li><strong>Google Gemini</strong>: <a href="https://aistudio.google.com/app/apikey" target="_blank">aistudio.google.com/app/apikey</a></li>
-            <li><strong>GroqCloud</strong>: <a href="https://console.groq.com/keys" target="_blank">console.groq.com/keys</a></li>
-            <li><strong>Mistral AI</strong>: <a href="https://admin.mistral.ai/organization/api-keys" target="_blank">admin.mistral.ai/organization/api-keys</a></li>
-        </ul>
-
-        <h2>3. Cấu hình API key trong Cài đặt</h2>
-        <p>Khi chạy file <span class="shortcut">.exe</span>, cửa sổ Cài đặt mở tự động. Bạn cũng có thể mở lại bằng double-click biểu tượng khay hệ thống hoặc chuột phải → <span class="highlight">Cài đặt / Settings</span>. Giao diện <strong>all-in-one</strong> (không tab): chọn <span class="highlight">Theme</span> (Midnight Gold / Aurora Glass / Rose Champagne), ngôn ngữ UI, provider, API, phím tắt trên một màn hình. Tiêu đề hiển thị phiên bản, ví dụ <span class="shortcut">DirectTrans Settings v2.0.0</span>.</p>
-
-        <div class="step-header">
-            <span class="step-num">1</span>
-            <span>Dán API key</span>
-        </div>
-        <p>Chọn <span class="highlight">Provider</span>, dán key vào ô <span class="highlight">API key</span>. Nếu dùng <strong>Google Free</strong> làm nguồn chính, không cần key.</p>
-
-        <div class="graphic-container">
-            <img class="app-screenshot" src="screenshot_settings.png" alt="Ảnh chụp giao diện Cài đặt" />
-        </div>
-
-        <div class="step-header">
-            <span class="step-num">2</span>
-            <span>Load Models</span>
-        </div>
-        <p>Nhấn <span class="highlight">↻ Load Models</span> để tải danh sách model hỗ trợ dịch (Gemini/Groq/Mistral). Thao tác này cũng lưu key nếu bạn vừa dán key mới.</p>
-
-        <div class="step-header">
-            <span class="step-num">3</span>
-            <span>Test &amp; Lưu Key</span>
-        </div>
-        <p>Nhấn <span class="highlight">Test</span> để kiểm tra kết nối. Thành công: nhãn xanh <span class="highlight" style="color: var(--pass-color);">Pass</span>; thất bại: nhãn đỏ <span class="highlight" style="color: var(--fail-color);">Fail</span>.</p>
-        <p>Nhấn <span class="highlight">Lưu Key / Save Key</span> để lưu cấu hình. Test hoặc Load Models thành công cũng có thể lưu key tự động.</p>
-
-        <h2>4. Phím tắt &amp; hai chế độ dịch</h2>
-        <p>Mặc định thường có hai phím tắt (có thể thêm/xóa trong khung <span class="highlight">Phím tắt</span>; danh sách dài dùng <span class="highlight">Xem thêm</span>):</p>
-        <ul>
-            <li><span class="shortcut">Ctrl+Shift+V</span> — ví dụ Popup, dịch sang Tiếng Việt.</li>
-            <li><span class="shortcut">Ctrl+Shift+E</span> — ví dụ Popup, dịch sang Tiếng Anh.</li>
+            <li>Giải nén hoặc copy <code>DirectTrans_v*.exe</code> vào thư mục cố định; chạy file exe.</li>
+            <li>Lần đầu: cửa sổ <strong>Cài đặt</strong> mở tự động — cấu hình API (nếu cần) và phím tắt.</li>
+            <li><code>config.json</code> và <code>directtrans.log</code> nằm <strong>cùng thư mục với exe</strong>.</li>
+            <li>Mở lại Settings: <strong>double-click</strong> icon khay hoặc chuột phải → Cài đặt.</li>
+            <li>Chạy exe mới khi bản cũ còn mở: bản cũ được <strong>tắt</strong> để bản mới tiếp quản (một instance).</li>
         </ul>
 
-        <div class="step-header">
-            <span class="step-num">A</span>
-            <span>Popup (hiện kết quả)</span>
-        </div>
-        <p>Chọn văn bản → nhấn phím tắt Popup. Cửa sổ hiện bản dịch; bạn có thể <span class="highlight" style="color: var(--teal);">Copy</span> hoặc <span class="highlight" style="color: var(--coral);">Replace</span> để thay đoạn đã chọn trong ứng dụng đang dùng.</p>
+        <h2 id="api-key">Lấy API key</h2>
+        <p>Chỉ cần khi dùng Gemini, Groq hoặc Mistral làm nguồn chính. Google Free không yêu cầu key.</p>
+        <table class="compact">
+            <thead>
+                <tr><th>Provider</th><th>Đăng ký / tạo key</th></tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Google Gemini</strong></td>
+                    <td><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">aistudio.google.com/app/apikey</a></td>
+                </tr>
+                <tr>
+                    <td><strong>GroqCloud</strong></td>
+                    <td><a href="https://console.groq.com/keys" target="_blank" rel="noopener">console.groq.com/keys</a></td>
+                </tr>
+                <tr>
+                    <td><strong>Mistral AI</strong></td>
+                    <td><a href="https://admin.mistral.ai/organization/api-keys" target="_blank" rel="noopener">admin.mistral.ai → API keys</a></td>
+                </tr>
+            </tbody>
+        </table>
+        <p class="note">Trong Settings, nút <strong>🔗 Get API key</strong> (theo từng provider) mở trang tương ứng. Sao chép key và dán vào ô <strong>API key</strong>; không chia sẻ key công khai.</p>
 
-        <div class="graphic-container">
-            <img class="app-screenshot" src="screenshot_popup.png" alt="Ảnh chụp cửa sổ Popup" />
-        </div>
+        <h2 id="settings">3. Cài đặt trong Settings</h2>
+        <figure>
+            <img src="screenshot_settings.png" alt="Cửa sổ Cài đặt DirectTrans" width="960" height="auto" />
+            <figcaption>Toàn bộ cấu hình trên một màn hình: theme, ngôn ngữ UI, provider, API, phím tắt, tùy chọn.</figcaption>
+        </figure>
 
-        <div class="step-header">
-            <span class="step-num">B</span>
-            <span>Replace (thay thế trực tiếp)</span>
-        </div>
-        <p>Chọn văn bản → nhấn phím tắt Replace. Bản dịch được chèn trực tiếp (mô phỏng Ctrl+V), không hiện popup. Ứng dụng cố giữ định dạng RTF (in đậm, font…) khi nguồn hỗ trợ RTF.</p>
+        <h3 id="settings-api">Nguồn dịch &amp; API</h3>
+        <ol class="steps">
+            <li>Chọn <strong>Provider</strong> (Google Free / Gemini / Groq / Mistral).</li>
+            <li>Dán <strong>API key</strong> (bỏ qua nếu dùng Google Free).</li>
+            <li><strong>↻ Load Models</strong> — tải danh sách model dịch; thường đồng thời lưu key vừa dán.</li>
+            <li>Chọn <strong>Model</strong> trong dropdown (sau khi load thành công).</li>
+            <li><strong>Test</strong> — kiểm tra kết nối: <span class="pass">Pass</span> / <span class="fail">Fail</span> hiển thị trên thanh công cụ.</li>
+            <li><strong>Save Key</strong> — lưu key và model vào <code>config.json</code> (mã hóa DPAPI trên Windows).</li>
+        </ol>
+        <p>Icon <strong>×</strong> trong ô API key xóa nội dung nhanh. Khi chạy từ exe, tên model mặc định có thể được reset mỗi lần khởi động; <strong>API key được giữ</strong>.</p>
 
-        <div class="note">
-            <strong>Phím tắt — lưu ý quan trọng:</strong> Không nên dùng <span class="shortcut">Space</span>, <span class="shortcut">F1</span>–<span class="shortcut">F12</span>, <span class="shortcut">Enter</span>, <span class="shortcut">Tab</span>… làm phím chính; ưu tiên chữ/số kèm <span class="shortcut">Ctrl</span>/<span class="shortcut">Shift</span>. Dialog thêm/sửa phím tắt có dòng cảnh báo tương ứng. Dùng phím đặc biệt có thể khiến đăng ký hotkey lỗi.
-        </div>
+        <h3>Theme &amp; header</h3>
+        <p>Dropdown theme: <strong>Midnight Gold</strong>, <strong>Aurora Glass</strong>, <strong>Rose Champagne</strong>. Các nút <strong>User manual</strong>, <strong>Feedback</strong>, <strong>Update</strong> nằm trên header.</p>
 
-        <h2>5. Ngôn ngữ giao diện &amp; tùy chọn khác</h2>
-        <p>Góc trên Cài đặt: chọn ngôn ngữ UI — <strong>Tiếng Việt, English, 한국어, 中文, 日本語</strong>. Nhãn và font giao diện cập nhật theo lựa chọn.</p>
+        <h2 id="hotkeys">4. Phím tắt</h2>
+        <p>Mặc định thường có hai hotkey (Popup → Việt / Anh). Thêm, sửa, xóa trong khung <strong>Phím tắt</strong>; nếu có hơn 5 dòng, dùng <strong>Xem thêm</strong>.</p>
+        <table class="compact">
+            <thead>
+                <tr><th>Chế độ</th><th>Hành vi</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>Popup</strong></td><td>Hiện cửa sổ kết quả; Copy hoặc Replace từ popup.</td></tr>
+                <tr><td><strong>Replace</strong></td><td>Thay đoạn đã chọn ngay (giữ RTF khi ứng dụng nguồn hỗ trợ).</td></tr>
+            </tbody>
+        </table>
+        <figure>
+            <img src="screenshot_hotkey_dialog.png" alt="Hộp thoại thêm phím tắt" />
+            <figcaption>Thêm / sửa hotkey: chọn tổ hợp phím, ngôn ngữ đích, chế độ Popup hoặc Replace.</figcaption>
+        </figure>
+        <figure>
+            <img src="screenshot_hotkey_manage.png" alt="Quản lý danh sách phím tắt" />
+            <figcaption>Quản lý danh sách dài — double-click một dòng để sửa.</figcaption>
+        </figure>
+        <p class="note"><strong>Gợi ý phím:</strong> Dùng chữ/số kèm <kbd>Ctrl</kbd>/<kbd>Shift</kbd>/<kbd>Alt</kbd>. Tránh <kbd>Space</kbd>, <kbd>Enter</kbd>, <kbd>Tab</kbd>, <kbd>F1</kbd>–<kbd>F12</kbd> làm phím chính — dễ trùng hệ thống hoặc đăng ký hotkey thất bại.</p>
+
+        <h2 id="popup">5. Popup dịch</h2>
+        <figure>
+            <img src="screenshot_popup.png" alt="Cửa sổ popup dịch" />
+            <figcaption>Popup sau phím tắt chế độ Popup — căn giữa màn hình (hỗ trợ màn hình scale DPI cao).</figcaption>
+        </figure>
+        <table class="compact">
+            <thead>
+                <tr><th>Thành phần</th><th>Chức năng</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Dòng trạng thái</td><td>Hiển thị provider đã dịch (kể cả khi dùng fallback).</td></tr>
+                <tr><td>Theme (combo)</td><td>Đổi giao diện popup; đồng bộ với Settings nếu đang mở.</td></tr>
+                <tr><td>Font color &amp; size</td><td>Màu hex và cỡ chữ kết quả; lưu theo từng theme.</td></tr>
+                <tr><td><strong>Copy</strong></td><td>Sao chép bản dịch vào clipboard.</td></tr>
+                <tr><td><strong>Replace</strong></td><td>Ẩn popup, quay lại app nguồn và thay đoạn đã chọn.</td></tr>
+                <tr><td><kbd>Esc</kbd></td><td>Đóng popup.</td></tr>
+            </tbody>
+        </table>
+        <p>Trong lúc <strong>Đang dịch…</strong>, Copy/Replace bị vô hiệu đến khi có kết quả hoặc lỗi.</p>
+
+        <h2 id="tuy-chon">6. Tùy chọn &amp; khay hệ thống</h2>
         <ul>
-            <li><strong>Khởi động cùng Windows</strong> — ghi vào registry Run (chỉ tài khoản Windows hiện tại).</li>
-            <li><strong>Cập nhật</strong> — mở trang phát hành mới trên GitHub.</li>
-            <li><strong>Góp ý / Feedback</strong> — mở email với tiêu đề <span class="shortcut">Direct Trans issue_…</span> và đính kèm file log <span class="shortcut">directtrans.log</span> (cùng thư mục với file exe). Cần Outlook hoặc ứng dụng mail mặc định; nếu không có Outlook, hộp thoại mail mở kèm đường dẫn log để bạn đính kèm tay.</li>
-            <li><strong>Tạm dừng</strong> — từ menu khay hệ thống để tắt phản hồi phím tắt (không thoát app).</li>
+            <li><strong>Khởi động cùng Windows</strong> — ghi registry Run (tài khoản hiện tại); khi nâng cấp exe, đường dẫn autostart được cập nhật tự động.</li>
+            <li><strong>Update</strong> — kiểm tra / mở trang phát hành GitHub.</li>
+            <li><strong>Feedback</strong> — soạn email kèm log <code>directtrans.log</code> (ưu tiên Outlook).</li>
+            <li>Menu khay: <strong>Bật/Tắt</strong> tạm dừng phím tắt (không thoát app), <strong>Thoát</strong> đóng hoàn toàn.</li>
         </ul>
 
-        <h2>6. Xử lý sự cố nhanh</h2>
-        <ul>
-            <li>Không lấy được văn bản: đảm bảo đã <strong>bôi chọn</strong> văn bản trước khi nhấn phím tắt; thử lại sau khi click vào cửa sổ ứng dụng đích.</li>
-            <li>Phím tắt không hoạt động: kiểm tra trùng phím với app khác; đổi combo trong Cài đặt.</li>
-        </ul>
+        <h2 id="su-co">7. Xử lý sự cố</h2>
+        <div class="grid2">
+            <div class="card">
+                <strong>Không lấy được văn bản</strong>
+                Bôi chọn trước khi nhấn hotkey; click lại cửa sổ app đích; thử Copy thủ công để kiểm tra clipboard.
+            </div>
+            <div class="card">
+                <strong>Hotkey không phản hồi</strong>
+                Kiểm tra app đã bật trên khay; không ở trạng thái Tắt; đổi combo tránh trùng phần mềm khác.
+            </div>
+            <div class="card">
+                <strong>Test API Fail</strong>
+                Key sai/hết hạn; chưa Load Models; firewall chặn HTTPS; thử provider khác hoặc Google Free.
+            </div>
+            <div class="card">
+                <strong>Replace sai định dạng</strong>
+                Một số app không xuất RTF qua clipboard — chỉ thay plain text; xem ghi chú kỹ thuật trong repo nếu cần.
+            </div>
+        </div>
+
+        <footer>© DirectTrans — Tài liệu người dùng (offline).</footer>
     </main>
-
-    <footer>
-        <p>© 2026 DirectTrans — Hướng dẫn nội bộ (offline).</p>
-    </footer>
 </div>
-
 </body>
 </html>
