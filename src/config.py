@@ -61,6 +61,7 @@ class Config:
     def __init__(self):
         self.config_path = self._resolve_config_path()
         self._was_created = False
+        self._theme_listener = None
         self.data = self._load()
         if getattr(sys, "frozen", False):
             self.reset_provider_models_to_defaults()
@@ -150,8 +151,18 @@ class Config:
         return tid if tid in THEME_IDS else DEFAULT_THEME_ID
 
     def set_ui_theme(self, theme_id: str) -> None:
+        from ui.qt.theme import THEME_IDS
+
+        if theme_id not in THEME_IDS:
+            return
         self.data["ui_theme"] = theme_id
         self.save()
+        listener = getattr(self, "_theme_listener", None)
+        if listener:
+            try:
+                listener(theme_id)
+            except Exception:
+                pass
 
     DEFAULT_POPUP_STYLE = {
         "midnight_gold": {"color": "#B1B9E5", "size": 12},

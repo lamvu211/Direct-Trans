@@ -23,6 +23,18 @@ class TranslationError(Exception):
     pass
 
 
+_SENSITIVE_URL_RE = re.compile(r"([?&]key=)[^&\s\"']+", re.IGNORECASE)
+_BEARER_RE = re.compile(r"(Bearer\s+)[^\s\"']+", re.IGNORECASE)
+
+
+def _sanitize_error_message(message: str) -> str:
+    if not message:
+        return message
+    message = _SENSITIVE_URL_RE.sub(r"\1***", message)
+    message = _BEARER_RE.sub(r"\1***", message)
+    return message
+
+
 @dataclass(frozen=True)
 class TranslationResult:
     text: str
@@ -37,7 +49,9 @@ class TranslationBackend(ABC):
 
 
 class BaseHTTPTranslator(TranslationBackend):
-    def _make_request_with_retry(self, url, headers, json_payload=None, params=None, method="post"):
+    def _make_request_with_retry(
+        self, url, headers, json_payload=None, form_data=None, params=None, method="post"
+    ):
         import time
         import requests
         max_retries = 3
@@ -46,7 +60,14 @@ class BaseHTTPTranslator(TranslationBackend):
         for attempt in range(max_retries):
             try:
                 if method == "post":
-                    resp = requests.post(url, headers=headers, json=json_payload, params=params, timeout=30)
+                    if form_data is not None:
+                        resp = requests.post(
+                            url, headers=headers, data=form_data, params=params, timeout=30
+                        )
+                    else:
+                        resp = requests.post(
+                            url, headers=headers, json=json_payload, params=params, timeout=30
+                        )
                 else:
                     resp = requests.get(url, headers=headers, params=params, timeout=30)
                 resp.raise_for_status()
@@ -58,18 +79,18 @@ class BaseHTTPTranslator(TranslationBackend):
                     time.sleep(retry_delay)
                     retry_delay *= 2
                     continue
-                raise TranslationError(f"API error: {e}")
+                raise TranslationError(_sanitize_error_message(f"API error: {e}"))
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
                 if attempt < max_retries - 1:
                     logging.warning(f"Network error ({e}). Retrying in {retry_delay}s... (Attempt {attempt + 1}/{max_retries})")
                     time.sleep(retry_delay)
                     retry_delay *= 2
                     continue
-                raise TranslationError(f"Network error: {e}")
+                raise TranslationError(_sanitize_error_message(f"Network error: {e}"))
             except ValueError as e:
                 raise TranslationError(f"Invalid response (not JSON): {e}")
             except Exception as e:
-                raise TranslationError(f"Request failed: {e}")
+                raise TranslationError(_sanitize_error_message(f"Request failed: {e}"))
 
 
 SYSTEM_PROMPT = """You are a highly capable, professional translator and language editor. Your task is to translate the text enclosed in <text> tags into {target_lang}.
@@ -120,9 +141,11 @@ class GeminiTranslator(BaseHTTPTranslator):
         try:
             data = self._make_request_with_retry(
                 url=api_url,
-                headers={"Content-Type": "application/json"},
+                headers={
+                    "Content-Type": "application/json",
+                    "x-goog-api-key": api_key,
+                },
                 json_payload=payload,
-                params={"key": api_key}
             )
             return data['candidates'][0]['content']['parts'][0]['text'].strip()
         except (KeyError, IndexError) as e:
@@ -194,7 +217,7 @@ class MistralTranslator(BaseHTTPTranslator):
 class GoogleFreeTranslator(BaseHTTPTranslator):
     URL = "https://translate.googleapis.com/translate_a/single"
     CLIENT_IDS = ("dict-chrome-ex", "at", "gtx")
-    CHUNK_SIZE = 5000
+    CHUNK_SIZE = 3500
 
     def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
         # Split into chunks if text is too long
@@ -217,16 +240,23 @@ class GoogleFreeTranslator(BaseHTTPTranslator):
 
         last_error = None
         for client in self.CLIENT_IDS:
-            params = {
+            form_data = {
                 "client": client,
                 "sl": "auto",
                 "tl": target_lang,
                 "dt": "t",
                 "q": text,
             }
+            post_headers = {
+                **headers,
+                "Content-Type": "application/x-www-form-urlencoded",
+            }
             try:
                 data = self._make_request_with_retry(
-                    self.URL, params=params, headers=headers, method="get"
+                    self.URL,
+                    headers=post_headers,
+                    form_data=form_data,
+                    method="post",
                 )
                 if data and data[0]:
                     return ''.join(part[0] for part in data[0] if part and part[0])

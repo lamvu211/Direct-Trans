@@ -52,18 +52,19 @@ class TestTranslator(unittest.TestCase):
         res = t.translate("Hello", "Vietnamese", "vi", api_key="test_key", model="mistral")
         self.assertEqual(res, "Xin chào")
         
-    @patch('translator.requests.get')
-    def test_google_free_translator(self, mock_get):
+    @patch('translator.requests.post')
+    def test_google_free_translator(self, mock_post):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = [
             [["Xin chào", "Hello", None, None, 1]], None, "en"
         ]
-        mock_get.return_value = mock_resp
+        mock_post.return_value = mock_resp
         
         t = GoogleFreeTranslator()
         res = t.translate("Hello", "Vietnamese", "vi")
         self.assertEqual(res, "Xin chào")
+        self.assertTrue(mock_post.called)
 
 if __name__ == '__main__':
     unittest.main()

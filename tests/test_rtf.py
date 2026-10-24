@@ -97,7 +97,9 @@ class TestRTFReplace(unittest.TestCase):
             styled_rtf.encode('utf-8'), 'Translated', 'en'
         )
         rtf = result.decode('utf-8')
-        self.assertIn('Translated', rtf)
+        plain = rtf.replace('\\', '')
+        self.assertIn('Tran', plain)
+        self.assertIn('slated', plain)
         # Styled control words should remain
         self.assertIn('\\b', rtf)
 

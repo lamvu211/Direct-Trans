@@ -104,14 +104,6 @@ def kill_old_processes():
     except Exception:
         pass
     
-    # Clean up any stale signal files left by killed processes
-    signal_file = os.path.join(LOG_DIR, 'directtrans.signal')
-    try:
-        if os.path.exists(signal_file):
-            os.remove(signal_file)
-    except Exception:
-        pass
-
 def check_single_instance():
     """Checks if another instance is running using a Windows Mutex.
     If yes, writes a signal file to restore the existing instance and exits.
@@ -177,6 +169,15 @@ class DirectTransApp:
         self.settings_window = None
         self.translation_thread = None
         self._processing_lock = threading.Lock()
+        self.config._theme_listener = self._on_ui_theme_changed
+
+    def _on_ui_theme_changed(self, theme_id: str):
+        settings = getattr(self, "settings_window", None)
+        if settings is not None and hasattr(settings, "set_theme"):
+            try:
+                settings.set_theme(theme_id)
+            except Exception:
+                pass
 
     def run(self):
         """Start the application on the main thread."""
@@ -563,12 +564,12 @@ class DirectTransApp:
 
 
 if __name__ == '__main__':
+    check_single_instance()
+    _boot_trace("boot: after check_single_instance")
     if getattr(sys, 'frozen', False):
         _boot_trace("boot: before kill_old_processes")
         kill_old_processes()
         _boot_trace("boot: after kill_old_processes")
-    check_single_instance()
-    _boot_trace("boot: after check_single_instance")
 
     app = DirectTransApp()
     app.run()

@@ -152,7 +152,7 @@ class ClipboardUtil:
         # Data Loss Risk: 0.2s delay is to ensure the target app processes the Ctrl+V
         # before we restore the old clipboard content. If the app is slow, it might
         # paste the restored original content instead of the translated text.
-        time.sleep(0.2)
+        time.sleep(0.4)
 
         # Restore clipboard after paste
         ClipboardUtil._write_clipboard(backup_dict)
@@ -336,7 +336,7 @@ class RTFManipulator:
         Replace text in RTF while preserving formatting.
         Falls back to simple RTF if parsing fails.
         """
-        rtf_str = original_rtf.decode('utf-8', errors='replace')
+        rtf_str = original_rtf.decode('latin-1', errors='replace')
 
         from font_mapper import FontMapper
         new_font = FontMapper.get_font(target_lang)
@@ -345,12 +345,12 @@ class RTFManipulator:
             result = RTFManipulator._do_rtf_replace(
                 rtf_str, new_text, new_font, original_text=original_text
             )
-            return result.encode('utf-8')
+            return result.encode('latin-1', errors='replace')
         except ValueError:
-            return RTFManipulator._create_simple_rtf(new_text, new_font).encode('utf-8')
+            return RTFManipulator._create_simple_rtf(new_text, new_font).encode('latin-1', errors='replace')
         except Exception:
             # Fallback: create simple RTF with the new font
-            return RTFManipulator._create_simple_rtf(new_text, new_font).encode('utf-8')
+            return RTFManipulator._create_simple_rtf(new_text, new_font).encode('latin-1', errors='replace')
 
     @staticmethod
     def _do_rtf_replace(rtf_str: str, new_text: str, new_font: str,
@@ -476,22 +476,32 @@ class RTFManipulator:
                 
                 # Replace plain text tokens in this paragraph
                 new_p_tokens = []
-                text_tokens_in_p = sum(1 for t, v in p_tokens if t == 'text' and v.strip())
-                text_token_idx = 0
-                trans_remaining = trans_line
-                
-                for t_type, t_val in p_tokens:
+                text_spans = [
+                    (idx, t_val)
+                    for idx, (t, t_val) in enumerate(p_tokens)
+                    if t == 'text' and t_val.strip()
+                ]
+                orig_lens = [len(v) for _, v in text_spans]
+                total_orig = sum(orig_lens) or 1
+                trans_chunks = []
+                consumed = 0
+                for i, length in enumerate(orig_lens):
+                    if i == len(orig_lens) - 1:
+                        trans_chunks.append(trans_line[consumed:])
+                    else:
+                        take = max(1, round(len(trans_line) * length / total_orig))
+                        take = min(take, len(trans_line) - consumed)
+                        trans_chunks.append(trans_line[consumed:consumed + take])
+                        consumed += take
+                span_to_chunk = {idx: chunk for (idx, _), chunk in zip(text_spans, trans_chunks)}
+
+                for t_idx, (t_type, t_val) in enumerate(p_tokens):
                     if t_type == 'text' and t_val.strip():
-                        text_token_idx += 1
                         if not applied_font:
-                            # Insert font change control word
                             new_p_tokens.append(('control', f'\\f{new_font_idx} '))
                             applied_font = True
-                        
-                        if text_token_idx == 1:
-                            new_p_tokens.append(('text', RTFManipulator._escape_rtf_text(trans_remaining)))
-                        else:
-                            new_p_tokens.append(('text', ''))
+                        chunk = span_to_chunk.get(t_idx, '')
+                        new_p_tokens.append(('text', RTFManipulator._escape_rtf_text(chunk)))
                     elif t_type == 'text':
                         # Whitespace-only token, preserve as is
                         new_p_tokens.append((t_type, t_val))
@@ -615,8 +625,11 @@ class RTFManipulator:
             elif ch == '\t':
                 result.append('\\tab ')
             elif ord(ch) > 127:
-                # Unicode escape: \uN?
-                result.append(f'\\u{ord(ch)}?')
+                code = ord(ch)
+                if code > 0xFFFF:
+                    code -= 0x10000
+                signed = code if code <= 32767 else code - 65536
+                result.append(f'\\u{signed}?')
             else:
                 result.append(ch)
         return ''.join(result)
