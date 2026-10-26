@@ -143,6 +143,14 @@ class TestFallbackChain(unittest.TestCase):
         result = mgr.translate('Hello', 'Vietnamese', 'vi')
         self.assertEqual(result.text, 'Xin chào')
 
+    def test_strips_multiple_reasoning_blocks(self):
+        config = MockConfig(api_keys={PROVIDER_GEMINI: 'key1'})
+        raw = '<think>a</think>Hi<think>b</think> there'
+        gemini = StubBackend(result=raw)
+        mgr = self._manager_with_stubs(config, {PROVIDER_GEMINI: gemini})
+        result = mgr.translate('Hi', 'Vietnamese', 'vi')
+        self.assertEqual(result.text, 'Hi there')
+
     def test_all_providers_fail_raises(self):
         config = MockConfig(api_keys={
             PROVIDER_GEMINI: 'k1',

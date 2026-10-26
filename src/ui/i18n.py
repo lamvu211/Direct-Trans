@@ -99,6 +99,10 @@ TRANSLATIONS = {
         'err_api_key_msg': 'Vui lòng mở Settings để nhập API Key.',
         'err_clipboard_title': 'Lỗi: Lấy văn bản thất bại',
         'err_clipboard_msg': 'Không thể lấy văn bản từ clipboard.',
+        'err_clipboard_empty_msg': (
+            'Không có đoạn chữ được chọn. Hãy bôi đen đoạn cần dịch '
+            '(email, Word, trình duyệt…), rồi bấm phím tắt dịch.'
+        ),
         'err_trans_title': 'Lỗi dịch: {}',
         'err_trans_msg': 'Xem log để biết thêm chi tiết.',
         'processing_title': 'Đang xử lý',
@@ -180,6 +184,10 @@ TRANSLATIONS = {
         'err_api_key_msg': 'Please open Settings to enter your API Key.',
         'err_clipboard_title': 'Error: Clipboard Failed',
         'err_clipboard_msg': 'Could not get text from clipboard.',
+        'err_clipboard_empty_msg': (
+            'No text was selected. Highlight the text you want to translate, '
+            'then press your translation hotkey.'
+        ),
         'err_trans_title': 'Translation Error: {}',
         'err_trans_msg': 'Check log for more details.',
         'processing_title': 'Processing',
@@ -261,6 +269,10 @@ TRANSLATIONS = {
         'err_api_key_msg': '설정에서 API 키를 입력해 주세요.',
         'err_clipboard_title': '오류: 클립보드 실패',
         'err_clipboard_msg': '클립보드에서 텍스트를 가져올 수 없습니다.',
+        'err_clipboard_empty_msg': (
+            '선택한 텍스트가 없습니다. 번역할 문장을 드래그로 선택한 뒤 '
+            '번역 단축키를 누르세요.'
+        ),
         'err_trans_title': '번역 오류: {}',
         'err_trans_msg': '자세한 내용은 로그를 확인하세요.',
         'processing_title': '처리 중',
@@ -342,6 +354,9 @@ TRANSLATIONS = {
         'err_api_key_msg': '请打开设置输入您的 API 密钥。',
         'err_clipboard_title': '错误：剪贴板失败',
         'err_clipboard_msg': '无法从剪贴板获取文本。',
+        'err_clipboard_empty_msg': (
+            '未选中任何文字。请先用鼠标选中要翻译的内容，再按翻译快捷键。'
+        ),
         'err_trans_title': '翻译错误：{}',
         'err_trans_msg': '查看日志了解更多详情。',
         'processing_title': '处理中',
@@ -423,6 +438,10 @@ TRANSLATIONS = {
         'err_api_key_msg': '設定画面で API キーを入力してください。',
         'err_clipboard_title': 'エラー：クリップボード失敗',
         'err_clipboard_msg': 'クリップボードからテキストを取得できませんでした。',
+        'err_clipboard_empty_msg': (
+            'テキストが選択されていません。翻訳したい部分を選択してから、'
+            '翻訳のショートカットキーを押してください。'
+        ),
         'err_trans_title': '翻訳エラー：{}',
         'err_trans_msg': '詳細はログを確認してください。',
         'processing_title': '処理中',

@@ -602,18 +602,13 @@ class QtPopupWindow:
 
         def perform_paste():
             time.sleep(0.25)
-            if target_hwnd:
-                try:
-                    ctypes.windll.user32.SetForegroundWindow(target_hwnd)
-                    time.sleep(0.05)
-                except Exception:
-                    pass
             try:
                 ClipboardUtil.replace_selected_text(
                     self.translated_text,
                     self.original_rtf,
                     self.target_lang_code,
                     original_text=self.original_text,
+                    target_hwnd=target_hwnd,
                 )
             except Exception as e:
                 logging.error("Error replacing text from popup: %s", e)

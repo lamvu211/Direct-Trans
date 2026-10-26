@@ -14,8 +14,22 @@ import logging
 
 CF_RTF = win32clipboard.RegisterClipboardFormat("Rich Text Format")
 
+# Wait after Ctrl+V before restoring the user's clipboard (slow apps need more time).
+CLIPBOARD_PASTE_SETTLE_DELAY = 0.65
+
 
 class ClipboardUtil:
+
+    @staticmethod
+    def _focus_window(hwnd: int | None) -> None:
+        if not hwnd:
+            return
+        try:
+            import ctypes
+            ctypes.windll.user32.SetForegroundWindow(hwnd)
+            time.sleep(0.05)
+        except Exception:
+            pass
 
     @staticmethod
     def get_selected_text() -> tuple:
@@ -95,8 +109,13 @@ class ClipboardUtil:
         return selected_text, selected_rtf
 
     @staticmethod
-    def replace_selected_text(translated_text: str, original_rtf: bytes | None,
-                              target_lang: str, original_text: str | None = None):
+    def replace_selected_text(
+        translated_text: str,
+        original_rtf: bytes | None,
+        target_lang: str,
+        original_text: str | None = None,
+        target_hwnd: int | None = None,
+    ):
         """
         Replace the selected text with translated text, preserving formatting.
         """
@@ -137,6 +156,8 @@ class ClipboardUtil:
 
         time.sleep(0.08)
 
+        ClipboardUtil._focus_window(target_hwnd)
+
         # Simulate Ctrl+V using Win32 API with proper scan codes
         VK_V = 0x56
         VK_CONTROL = 0x11
@@ -149,10 +170,8 @@ class ClipboardUtil:
         win32api.keybd_event(VK_CONTROL, SC_CONTROL, win32con.KEYEVENTF_KEYUP, 0)  # Ctrl up
         
         # We intentionally do NOT restore modifiers here via software KEYDOWN.
-        # Data Loss Risk: 0.2s delay is to ensure the target app processes the Ctrl+V
-        # before we restore the old clipboard content. If the app is slow, it might
-        # paste the restored original content instead of the translated text.
-        time.sleep(0.4)
+        # Let the target app finish pasting before we restore the old clipboard.
+        time.sleep(CLIPBOARD_PASTE_SETTLE_DELAY)
 
         # Restore clipboard after paste
         ClipboardUtil._write_clipboard(backup_dict)

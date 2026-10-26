@@ -393,7 +393,10 @@ class DirectTransApp:
             if not selected_text or not selected_text.strip():
                 logging.warning("Selected text is empty or only whitespace.")
                 self._show_error_popup(
-                    msgs.get('err_clipboard_msg', 'Không thể lấy văn bản từ clipboard.'),
+                    msgs.get(
+                        'err_clipboard_empty_msg',
+                        'Hãy bôi đen đoạn cần dịch, rồi bấm phím tắt dịch.',
+                    ),
                     target_lang_name,
                     target_lang_code,
                 )
@@ -467,8 +470,11 @@ class DirectTransApp:
             elif mode == MODE_REPLACE:
                 try:
                     ClipboardUtil.replace_selected_text(
-                        translated, selected_rtf, target_lang_code,
+                        translated,
+                        selected_rtf,
+                        target_lang_code,
                         original_text=selected_text,
+                        target_hwnd=original_hwnd,
                     )
                 except Exception:
                     def show_fallback():

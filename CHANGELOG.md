@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.0.5
+- **Replace**: Before Ctrl+V, focus returns to the window where you selected text (hotkey Replace and popup Replace); reduces pasting into the wrong app after a slow translation.
+- **Clipboard**: Wait **650ms** after paste before restoring the previous clipboard (was 400ms) to reduce wrong-content paste on slow hosts.
+- **Translation**: Clearer errors when Gemini / Groq / Mistral block, return empty, or malformed responses; strip multiple model “reasoning” blocks (`think`, `redacted_thinking`, `thinking`) from output.
+- **UI**: Dedicated empty-selection message (highlight text, then press the hotkey) in vi / en / ko / zh / ja.
+- **Build**: `APP_VERSION` **2.0.5**; artifact **`DirectTrans_v2.0.5.exe`**.
+
 ## v2.0.4
 - **UI**: Hover feedback on Language / Theme / Model combos and hotkey rows (aligned with ghost header buttons); all four themes.
 - **Hotkeys**: Single-click a row to edit (Settings and manage dialog); delete button unchanged.

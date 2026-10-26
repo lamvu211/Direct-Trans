@@ -35,6 +35,88 @@ def _sanitize_error_message(message: str) -> str:
     return message
 
 
+_REDACTED_THINKING_TAG = "redacted_thinking"
+_REASONING_BLOCK_PATTERNS = (
+    re.compile(r"<think>.*?</think>", re.IGNORECASE | re.DOTALL),
+    re.compile(
+        rf"<{_REDACTED_THINKING_TAG}>.*?</{_REDACTED_THINKING_TAG}>",
+        re.IGNORECASE | re.DOTALL,
+    ),
+    re.compile(r"<thinking>.*?</thinking>", re.IGNORECASE | re.DOTALL),
+)
+
+
+def clean_model_output(text: str) -> str:
+    """Remove model reasoning blocks that sometimes leak into the translation."""
+    if not text:
+        return text
+    result = text.strip()
+    while True:
+        changed = False
+        for pattern in _REASONING_BLOCK_PATTERNS:
+            new_result, count = pattern.subn("", result)
+            if count:
+                result = new_result.strip()
+                changed = True
+        if not changed:
+            break
+    return result.strip()
+
+
+def _extract_gemini_text(data: dict) -> str:
+    feedback = data.get("promptFeedback") or {}
+    block_reason = feedback.get("blockReason")
+    if block_reason:
+        raise TranslationError(
+            "Gemini refused this text (content may not be allowed). "
+            "Try a shorter selection or another provider."
+        )
+
+    candidates = data.get("candidates") or []
+    if not candidates:
+        raise TranslationError(
+            "Gemini did not return a translation (empty or blocked response)."
+        )
+
+    candidate = candidates[0]
+    finish = (candidate.get("finishReason") or "").upper()
+    if finish in ("SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT"):
+        raise TranslationError(
+            f"Gemini could not translate this text (blocked: {finish}). "
+            "Try different wording or another provider."
+        )
+
+    content = candidate.get("content") or {}
+    parts = content.get("parts") or []
+    chunks = [
+        part.get("text", "")
+        for part in parts
+        if isinstance(part, dict) and part.get("text")
+    ]
+    if not chunks:
+        raise TranslationError("Gemini returned an empty translation.")
+    return "".join(chunks).strip()
+
+
+def _extract_chat_completion_text(data: dict, provider_label: str) -> str:
+    choices = data.get("choices") or []
+    if not choices:
+        raise TranslationError(f"{provider_label} did not return a translation.")
+
+    choice = choices[0]
+    finish = (choice.get("finish_reason") or "").lower()
+    if finish == "content_filter":
+        raise TranslationError(
+            f"{provider_label} blocked this text. Try different wording or another provider."
+        )
+
+    message = choice.get("message") or {}
+    content = (message.get("content") or "").strip()
+    if not content:
+        raise TranslationError(f"{provider_label} returned an empty translation.")
+    return content
+
+
 @dataclass(frozen=True)
 class TranslationResult:
     text: str
@@ -147,8 +229,10 @@ class GeminiTranslator(BaseHTTPTranslator):
                 },
                 json_payload=payload,
             )
-            return data['candidates'][0]['content']['parts'][0]['text'].strip()
-        except (KeyError, IndexError) as e:
+            return _extract_gemini_text(data)
+        except TranslationError:
+            raise
+        except (KeyError, IndexError, TypeError) as e:
             raise TranslationError(f"Unexpected Gemini response format: {e}")
 
 
@@ -178,8 +262,10 @@ class GroqTranslator(BaseHTTPTranslator):
 
         try:
             data = self._make_request_with_retry(url=url, headers=headers, json_payload=payload)
-            return data['choices'][0]['message']['content'].strip()
-        except (KeyError, IndexError) as e:
+            return _extract_chat_completion_text(data, "Groq")
+        except TranslationError:
+            raise
+        except (KeyError, IndexError, TypeError) as e:
             raise TranslationError(f"Unexpected Groq response format: {e}")
 
 
@@ -209,8 +295,10 @@ class MistralTranslator(BaseHTTPTranslator):
 
         try:
             data = self._make_request_with_retry(url=url, headers=headers, json_payload=payload)
-            return data['choices'][0]['message']['content'].strip()
-        except (KeyError, IndexError) as e:
+            return _extract_chat_completion_text(data, "Mistral")
+        except TranslationError:
+            raise
+        except (KeyError, IndexError, TypeError) as e:
             raise TranslationError(f"Unexpected Mistral response format: {e}")
 
 
@@ -343,7 +431,7 @@ class TranslationManager:
                 result = backend.translate(text, target_lang_name, target_lang_code, **kwargs)
                 logging.info(f"Provider '{provider}' succeeded.")
 
-                result = re.sub(r'<think>.*?</think>\s*', '', result, count=1, flags=re.DOTALL).strip()
+                result = clean_model_output(result)
                 return TranslationResult(text=result, provider=provider)
             except Exception as e:
                 logging.warning(f"Provider '{provider}' failed: {e}")
