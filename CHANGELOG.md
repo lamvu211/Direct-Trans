@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.0.4
+- **UI**: Hover feedback on Language / Theme / Model combos and hotkey rows (aligned with ghost header buttons); all four themes.
+- **Hotkeys**: Single-click a row to edit (Settings and manage dialog); delete button unchanged.
+- **Popup**: Click the font size number to type a value directly (9–36); +/- buttons unchanged.
+- **Build**: `APP_VERSION` **2.0.4**; artifact **`DirectTrans_v2.0.4.exe`**.
+
 ## v2.0.3
 - **Startup (exe)**: **LOADING…** screen with progress bar (+10% per second, cap 100%) as soon as Python starts — `bootstrap.py` entry, Win32 splash on a background thread; closes when Settings appears.
 - **UI**: Rose Champagne brand title uses Segoe UI like other themes; popup font/color labels and tooltips follow UI language; hotkey row tooltip respects locale.

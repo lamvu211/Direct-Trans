@@ -19,25 +19,10 @@ from PySide6.QtWidgets import (
 from ui.i18n import TRANSLATIONS
 from ui.qt.hotkey_dialog import HotkeyDialog
 from ui.qt.hotkey_manage_dialog import HotkeyManageDialog
-from ui.qt.hotkey_ui import pause_translation_hotkeys
+from ui.qt.hotkey_ui import HotkeyRowClickToEdit, pass_mouse_to_row, pause_translation_hotkeys
 from ui.qt.widgets import CONTROL_HEIGHT
 
 HOTKEYS_COLLAPSED_COUNT = 5
-
-
-class _HotkeyRow(QFrame):
-    def __init__(self, hk: dict, on_edit, on_delete, parent=None):
-        super().__init__(parent)
-        self._hk = hk
-        self._on_edit = on_edit
-        self.setObjectName("hkRow")
-        self.setFixedHeight(CONTROL_HEIGHT)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip("")
-
-    def mouseDoubleClickEvent(self, event):
-        self._on_edit(self._hk)
-        super().mouseDoubleClickEvent(event)
 
 
 class HotkeySection(QWidget):
@@ -127,13 +112,16 @@ class HotkeySection(QWidget):
         else:
             self._more_btn.setVisible(False)
         self._add_btn.setText(t["add_hk_btn"])
-        tip = t.get("edit_hk_tip", "Double-click to edit")
+        tip = t.get("edit_hk_tip", "Click to edit")
         self.setToolTip(tip)
 
     def _make_row(self, hk: dict) -> QFrame:
         t = self._t()
-        row = _HotkeyRow(hk, self._on_edit, self._delete)
-        row.setToolTip(t.get("edit_hk_tip", "Double-click to edit"))
+        row = HotkeyRowClickToEdit(hk, self._on_edit)
+        row.setObjectName("hkRow")
+        row.setFixedHeight(CONTROL_HEIGHT)
+        row.setCursor(Qt.CursorShape.PointingHandCursor)
+        row.setToolTip(t.get("edit_hk_tip", "Click to edit"))
         h = QHBoxLayout(row)
         h.setContentsMargins(8, 0, 4, 0)
         h.setSpacing(6)
@@ -159,6 +147,7 @@ class HotkeySection(QWidget):
         h.addWidget(key_lbl)
         h.addWidget(lang_lbl, 1)
         h.addWidget(mode_lbl)
+        pass_mouse_to_row([key_lbl, lang_lbl, mode_lbl])
 
         hid = hk.get("id")
         delb = QToolButton()
@@ -170,7 +159,6 @@ class HotkeySection(QWidget):
         delb.clicked.connect(lambda checked=False, i=hid: self._delete(i))
 
         h.addWidget(delb)
-        row.setToolTip(t.get("edit_hk_tip", "Double-click to edit"))
         return row
 
     def _on_edit(self, hk: dict):

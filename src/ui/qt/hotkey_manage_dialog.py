@@ -22,21 +22,8 @@ from PySide6.QtWidgets import (
 
 from ui.i18n import TRANSLATIONS
 from ui.qt.hotkey_dialog import HotkeyDialog
+from ui.qt.hotkey_ui import HotkeyRowClickToEdit, pass_mouse_to_row
 from ui.qt.theme import apply_theme
-
-
-class _ManageHotkeyRow(QFrame):
-    def __init__(self, hk: dict, on_edit, parent=None):
-        super().__init__(parent)
-        self._hk = hk
-        self._on_edit = on_edit
-        self.setObjectName("hkRow")
-        self.setFixedHeight(24)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-
-    def mouseDoubleClickEvent(self, event):
-        self._on_edit(self._hk)
-        super().mouseDoubleClickEvent(event)
 
 
 class HotkeyManageDialog(QDialog):
@@ -130,8 +117,11 @@ class HotkeyManageDialog(QDialog):
         self._update_size()
 
     def _row(self, hk: dict) -> QFrame:
-        row = _ManageHotkeyRow(hk, self._on_edit)
-        row.setToolTip(self._t.get("edit_hk_tip", "Double-click to edit"))
+        row = HotkeyRowClickToEdit(hk, self._on_edit)
+        row.setObjectName("hkRow")
+        row.setFixedHeight(24)
+        row.setCursor(Qt.CursorShape.PointingHandCursor)
+        row.setToolTip(self._t.get("edit_hk_tip", "Click to edit"))
         h = QHBoxLayout(row)
         h.setContentsMargins(8, 0, 4, 0)
         h.setSpacing(6)
@@ -158,6 +148,7 @@ class HotkeyManageDialog(QDialog):
         h.addWidget(key_lbl)
         h.addWidget(lang_lbl, 1)
         h.addWidget(mode_lbl)
+        pass_mouse_to_row([key_lbl, lang_lbl, mode_lbl])
 
         hid = hk.get("id")
         delb = QToolButton()

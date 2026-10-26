@@ -9,13 +9,14 @@ import threading
 import time
 
 from PySide6.QtCore import Qt, QTimer, QPoint
-from PySide6.QtGui import QCursor, QFont, QGuiApplication, QIcon, QColor, QPainter, QPen, QPixmap
+from PySide6.QtGui import QCursor, QFont, QGuiApplication, QIcon, QColor, QIntValidator, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
     QApplication,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QTextEdit,
     QVBoxLayout,
@@ -31,6 +32,9 @@ from ui.qt.widgets import apply_premium_app, fit_combo_to_contents
 STATE_LOADING = "loading"
 STATE_READY = "ready"
 STATE_ERROR = "error"
+
+POPUP_FONT_SIZE_MIN = 9
+POPUP_FONT_SIZE_MAX = 36
 
 
 class _ThemedPopupWidget(QWidget):
@@ -75,6 +79,7 @@ class QtPopupWindow:
             "color_picker_tip": "Chọn màu chữ kết quả dịch",
             "font_decrease_tip": "Giảm cỡ chữ",
             "font_increase_tip": "Tăng cỡ chữ",
+            "font_size_edit_tip": "Nhấp để gõ cỡ chữ (9–36)",
         },
         "en": {
             "title_prefix": "Translate",
@@ -88,6 +93,7 @@ class QtPopupWindow:
             "color_picker_tip": "Choose result text color",
             "font_decrease_tip": "Decrease font size",
             "font_increase_tip": "Increase font size",
+            "font_size_edit_tip": "Click to type font size (9–36)",
         },
         "ko": {
             "title_prefix": "번역",
@@ -101,6 +107,7 @@ class QtPopupWindow:
             "color_picker_tip": "번역 결과 글자 색 선택",
             "font_decrease_tip": "글자 크기 줄이기",
             "font_increase_tip": "글자 크기 늘리기",
+            "font_size_edit_tip": "클릭하여 글자 크기 입력 (9–36)",
         },
         "zh": {
             "title_prefix": "翻译",
@@ -114,6 +121,7 @@ class QtPopupWindow:
             "color_picker_tip": "选择译文文字颜色",
             "font_decrease_tip": "减小字号",
             "font_increase_tip": "增大字号",
+            "font_size_edit_tip": "点击输入字号 (9–36)",
         },
         "ja": {
             "title_prefix": "翻訳",
@@ -127,6 +135,7 @@ class QtPopupWindow:
             "color_picker_tip": "翻訳結果の文字色を選択",
             "font_decrease_tip": "文字サイズを小さく",
             "font_increase_tip": "文字サイズを大きく",
+            "font_size_edit_tip": "クリックしてサイズ入力 (9–36)",
         },
     }
 
@@ -146,7 +155,7 @@ class QtPopupWindow:
         self.copy_btn: QPushButton | None = None
         self.replace_btn: QPushButton | None = None
         self.color_btn: QPushButton | None = None
-        self.size_label: QLabel | None = None
+        self.size_input: QLineEdit | None = None
         self._color_picker = None
         self._current_font_color = "#B1B9E5"
         self._current_font_size = 12
@@ -289,10 +298,18 @@ class QtPopupWindow:
         minus_btn.clicked.connect(self._on_decrease_font_size)
         size_lay.addWidget(minus_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        self.size_label = QLabel(str(self._current_font_size))
-        self.size_label.setObjectName("sizeVal")
-        self.size_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        size_lay.addWidget(self.size_label, 1, Qt.AlignmentFlag.AlignVCenter)
+        self.size_input = QLineEdit(str(self._current_font_size))
+        self.size_input.setObjectName("sizeEdit")
+        self.size_input.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.size_input.setFixedHeight(22)
+        self.size_input.setValidator(
+            QIntValidator(POPUP_FONT_SIZE_MIN, POPUP_FONT_SIZE_MAX, self.size_input)
+        )
+        self.size_input.setToolTip(t.get("font_size_edit_tip", "Click to type font size (9–36)"))
+        self.size_input.setCursor(Qt.CursorShape.IBeamCursor)
+        self.size_input.editingFinished.connect(self._on_font_size_edited)
+        self.size_input.returnPressed.connect(self._on_font_size_edited)
+        size_lay.addWidget(self.size_input, 1, Qt.AlignmentFlag.AlignVCenter)
 
         plus_btn = QPushButton("+")
         plus_btn.setObjectName("sizeBtn")
@@ -372,9 +389,13 @@ class QtPopupWindow:
         win.raise_()
         win.activateWindow()
 
+    @staticmethod
+    def _clamp_font_size(size: int) -> int:
+        return max(POPUP_FONT_SIZE_MIN, min(POPUP_FONT_SIZE_MAX, size))
+
     def _apply_output_style(self, color_hex: str, font_size: int, save: bool = True):
         self._current_font_color = color_hex.upper()
-        self._current_font_size = font_size
+        self._current_font_size = self._clamp_font_size(font_size)
         if self.text_widget:
             self.text_widget.setFont(QFont(self.text_widget.font().family(), self._current_font_size))
             self.text_widget.setStyleSheet(
@@ -384,20 +405,36 @@ class QtPopupWindow:
             clean = self._current_font_color.lstrip("#")
             self.color_btn.setIcon(_make_swatch_icon(self._current_font_color))
             self.color_btn.setText(f"# {clean}")
-        if self.size_label:
-            self.size_label.setText(str(self._current_font_size))
+        if self.size_input:
+            self.size_input.blockSignals(True)
+            self.size_input.setText(str(self._current_font_size))
+            self.size_input.blockSignals(False)
 
         if save and self.config:
             theme_id = self.config.get_ui_theme()
             self.config.set_popup_style(theme_id, color=self._current_font_color, size=self._current_font_size)
 
     def _on_decrease_font_size(self):
-        new_size = max(9, self._current_font_size - 1)
+        new_size = self._clamp_font_size(self._current_font_size - 1)
         self._apply_output_style(self._current_font_color, new_size)
 
     def _on_increase_font_size(self):
-        new_size = min(36, self._current_font_size + 1)
+        new_size = self._clamp_font_size(self._current_font_size + 1)
         self._apply_output_style(self._current_font_color, new_size)
+
+    def _on_font_size_edited(self):
+        if not self.size_input:
+            return
+        raw = self.size_input.text().strip()
+        if not raw:
+            self.size_input.setText(str(self._current_font_size))
+            return
+        try:
+            value = int(raw)
+        except ValueError:
+            self.size_input.setText(str(self._current_font_size))
+            return
+        self._apply_output_style(self._current_font_color, value)
 
     def sync_theme_display(self, theme_id: str) -> None:
         """Refresh popup QSS, theme combo, and font defaults without writing config."""

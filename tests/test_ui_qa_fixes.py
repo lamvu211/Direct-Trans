@@ -204,15 +204,22 @@ class TestUiQaFixes(unittest.TestCase):
         popup.show(translated_text="Sample output", target_lang="English", target_lang_code="en")
         self.app.processEvents()
         self.assertIsNotNone(popup.color_btn)
-        self.assertIsNotNone(popup.size_label)
-        self.assertEqual(popup.size_label.text(), "12")
+        self.assertIsNotNone(popup.size_input)
+        self.assertEqual(popup.size_input.text(), "12")
 
         # Test increase / decrease
         popup._on_increase_font_size()
         self.assertEqual(popup._current_font_size, 13)
-        self.assertEqual(popup.size_label.text(), "13")
+        self.assertEqual(popup.size_input.text(), "13")
         popup._on_decrease_font_size()
         self.assertEqual(popup._current_font_size, 12)
+
+        popup.size_input.setText("24")
+        popup._on_font_size_edited()
+        self.assertEqual(popup._current_font_size, 24)
+        popup.size_input.setText("99")
+        popup._on_font_size_edited()
+        self.assertEqual(popup._current_font_size, 36)
         popup.close()
 
     def test_settings_hotkeys_delete_layout_stable(self):
