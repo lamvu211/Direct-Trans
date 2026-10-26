@@ -1,28 +1,28 @@
 # DirectTrans
 
-Ứng dụng Windows chạy nền (khay hệ thống): chọn văn bản trong bất kỳ app nào, nhấn phím tắt toàn cục để dịch qua AI hoặc Google Translate, hiển thị popup hoặc thay thế trực tiếp đoạn đã chọn (có hỗ trợ RTF).
+Windows background app (system tray): select text in any application, press a global hotkey to translate via AI or Google Translate, then show a popup or replace the selection in place (RTF-aware).
 
 ---
 
-## Cài đặt (file exe)
+## Install (executable)
 
-1. Tải `DirectTrans_v*.exe` từ [Releases](https://github.com/lamvu211/Direct-Trans/releases) (hoặc thư mục `dist` sau khi build).
-2. Đặt file ở vị trí cố định (ví dụ `C:\Apps\DirectTrans\`).
-3. Chạy lần đầu — cửa sổ **Cài đặt** mở tự động; cấu hình API key và phím tắt (xem **Hướng dẫn sử dụng** trong app).
-4. App thu nhỏ về **khay hệ thống**. Double-click icon khay hoặc chuột phải → **Cài đặt** để mở lại Settings.
-5. Cấu hình lưu cạnh file exe (`config.json`); log: `directtrans.log`.
+1. Download the latest `DirectTrans_v*.exe` from [Releases](https://github.com/lamvu211/Direct-Trans/releases), or build locally (see below) and use the file under `dist\`.
+2. Keep the executable in a fixed folder (e.g. `C:\Apps\DirectTrans\`).
+3. On first run, a **LOADING…** progress screen appears, then **Settings** opens automatically — configure your API key and hotkeys (see **User manual** in the app).
+4. The app minimizes to the **system tray**. Double-click the tray icon or right-click → **Settings** to open Settings again.
+5. Config is stored next to the exe (`config.json`); logs: `directtrans.log` (do not share these files — they may contain personal metadata).
 
-> Chạy bản exe mới khi bản cũ còn mở: bản cũ sẽ được tắt để bản mới tiếp quản (cùng một instance).
+> If you launch a new build while an old instance is running, the old process is stopped so the new one takes over (single instance).
 
 ---
 
-## Giao diện cơ bản
+## UI overview
 
-### Cài đặt (Settings)
+### Settings
 
-Một màn hình: ngôn ngữ UI, theme (Midnight Gold, Aurora Glass, Rose Champagne, Nord Snow), nguồn dịch (provider), API key & model, phím tắt, tùy chọn khởi động Windows / cập nhật.
+Single screen: **UI language** (Vietnamese, English, Korean, Chinese, Japanese), **theme** (Midnight Gold, Aurora Glass, Rose Champagne, Nord Snow), translation provider (Gemini / Groq / Mistral / Google Free), API key and model, hotkeys, Windows startup, update check, User manual, and Feedback.
 
-Bấm ảnh thu nhỏ để xem kích thước đầy đủ; hoặc mở từng mục 🔍 bên dưới. (Ảnh trong repo là mẫu UI review; không chứa ảnh chụp máy cá nhân — xem [docs/PUBLIC_REPO.md](docs/PUBLIC_REPO.md).)
+Click thumbnails below for full-size shots, or expand each theme. Screenshots in this repo are generic UI review assets — see [docs/PUBLIC_REPO.md](docs/PUBLIC_REPO.md).
 
 <table>
   <tr>
@@ -36,7 +36,7 @@ Bấm ảnh thu nhỏ để xem kích thước đầy đủ; hoặc mở từng 
       <a href="docs/ui-review/screenshots/settings_rose_champagne.png"><img src="docs/ui-review/screenshots/settings_rose_champagne.png" width="200" alt="Rose Champagne" /></a><br>Rose Champagne
     </td>
     <td align="center" width="25%">
-      Nord Snow<br><sub>Chọn trong app; ảnh review chưa đưa lên repo công khai.</sub>
+      Nord Snow<br><sub>Available in the app; no public review screenshot in this repo yet.</sub>
     </td>
   </tr>
 </table>
@@ -54,60 +54,65 @@ Bấm ảnh thu nhỏ để xem kích thước đầy đủ; hoặc mở từng 
 <img src="docs/ui-review/screenshots/settings_rose_champagne.png" alt="Rose Champagne — Settings" />
 </details>
 
-### Popup dịch
+### Translation popup
 
-Hiện sau phím tắt chế độ **Popup**: nội dung dịch, theme, cỡ/màu chữ, **Copy** / **Replace**.
+Shown after a **Popup** hotkey: translated text, theme, font color/size, **Copy** / **Replace**.
 
-![Popup dịch](src/assets/screenshot_popup.png)
+![Translation popup](src/assets/screenshot_popup.png)
 
-### Khay hệ thống
+### System tray
 
-Menu: bật/tắt dịch tạm thời, mở Cài đặt, Thoát.
-
----
-
-## Cách dùng nhanh
-
-1. **Bôi chọn** văn bản trong Word, browser, chat, …
-2. Nhấn **phím tắt** đã gán (mặc định thường có Popup → Việt / Anh).
-3. **Popup:** đọc kết quả, Copy hoặc Replace. **Replace (hotkey):** thay trực tiếp không qua popup.
-
-Chi tiết API key, Test/Save key, quản lý phím tắt, tùy chọn popup: mở **User manual** trong Settings hoặc file `src/assets/user_manual.html`.
+Menu: pause/resume translation, open Settings, Quit.
 
 ---
 
-## Cấu trúc dự án (dev)
+## Quick start
+
+1. **Select** text in Word, a browser, chat, etc.
+2. Press your assigned **hotkey** (defaults often include Popup → Vietnamese / English).
+3. **Popup:** read the result, Copy or Replace. **Replace hotkey:** replaces text without opening the popup.
+
+For API keys, Test/Save key, hotkey management, and popup options, open **User manual** in Settings or see `src/assets/user_manual.html`.
+
+---
+
+## Project layout (development)
 
 ```text
 direct-trans/
 ├── src/
-│   ├── main.py              # Entry, tray + Qt loop, hotkeys
+│   ├── bootstrap.py         # PyInstaller entry (exe): Win32 loading → import app
+│   ├── main.py              # App logic; use `python src/main.py` in dev
+│   ├── win32_startup_splash.py
 │   ├── config.py            # config.json, API keys (DPAPI)
 │   ├── translator.py        # Gemini, Groq, Mistral, Google Free
 │   ├── hotkey_manager.py    # RegisterHotKey (Windows)
 │   ├── clipboard_util.py    # Copy / replace RTF
 │   ├── process_util.py      # Kill stale DirectTrans processes
 │   ├── assets/              # icon, user_manual.html, screenshots
-│   └── ui/qt/               # Settings, popup, themes, dialogs
+│   └── ui/qt/               # Settings, popup, themes, startup_splash
 ├── tests/
-├── scripts/                 # capture_manual_assets.py, UI screenshots
-├── DirectTrans.spec         # PyInstaller
+├── scripts/                 # capture_* (review assets — see PUBLIC_REPO.md)
+├── DirectTrans.spec         # PyInstaller (name follows APP_VERSION in constants.py)
 ├── build.bat
+├── CHANGELOG.md
 └── requirements.txt
 ```
 
-### Chạy từ source
+### Run from source
 
 ```bash
 pip install -r requirements.txt
 python src/main.py
 ```
 
-### Build exe
+### Build executable
 
 ```cmd
 .\build.bat
 ```
+
+Output: `dist\DirectTrans_v<version>.exe` (version from `src/constants.py` and `DirectTrans.spec`).
 
 ### Tests
 
@@ -115,15 +120,15 @@ python src/main.py
 python -m pytest tests/ -q
 ```
 
-Ảnh cho tài liệu:
+Documentation screenshots:
 
 ```bash
-python scripts/capture_ui_screenshots.py    # docs/ui-review (review trước khi commit ảnh)
-python scripts/capture_manual_assets.py     # src/assets — không commit nếu ảnh từ config máy bạn
+python scripts/capture_ui_screenshots.py    # docs/ui-review — review before committing images
+python scripts/capture_manual_assets.py     # src/assets — do not commit if captured with your real config
 python scripts/capture_readme_settings.py   # local only → src/assets/readme/ (gitignored)
 ```
 
-Chính sách repo công khai: [docs/PUBLIC_REPO.md](docs/PUBLIC_REPO.md).
+Public repo policy: [docs/PUBLIC_REPO.md](docs/PUBLIC_REPO.md).
 
 ---
 

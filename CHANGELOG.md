@@ -1,13 +1,14 @@
 # Changelog
 
 ## v2.0.3
-- **Startup**: Win32 loading UI via `bootstrap.py` (+10%/s until Settings); monochrome LOADING… bar design.
-- **UI**: Rose Champagne brand font matches other themes (Segoe UI); popup font/color tooltips localized (vi/en/ko/zh/ja); hotkey row tooltip follows UI language.
-- **Build**: `APP_VERSION` **2.0.3**; artifact **`DirectTrans_v2.0.3.exe`**; PyInstaller entry `bootstrap.py`.
+- **Startup (exe)**: **LOADING…** screen with progress bar (+10% per second, cap 100%) as soon as Python starts — `bootstrap.py` entry, Win32 splash on a background thread; closes when Settings appears.
+- **UI**: Rose Champagne brand title uses Segoe UI like other themes; popup font/color labels and tooltips follow UI language; hotkey row tooltip respects locale.
+- **Repo**: Expanded `.gitignore` (logs, local exe, internal notes); updated `docs/PUBLIC_REPO.md`.
+- **Build**: `APP_VERSION` **2.0.3**; artifact **`DirectTrans_v2.0.3.exe`** (`DirectTrans.spec` → `src/bootstrap.py`).
 
 ## v2.0.2
 - **Theme**: **Nord Snow** (`nord_snow`) — light frost palette (fourth option in Settings / popup theme dropdown); per-theme popup font defaults; light color picker styling.
-- **Docs & samples**: README, user manual, PySide6 all-in-one samples; `docs/PUBLIC_REPO.md` (không commit ảnh/config cá nhân lên GitHub public).
+- **Docs & samples**: README, user manual, PySide6 all-in-one samples; `docs/PUBLIC_REPO.md` (do not commit personal screenshots/config to the public repo).
 - **Build**: `APP_VERSION` **2.0.2**; artifact **`DirectTrans_v2.0.2.exe`**.
 
 ## v2.0.1
@@ -37,8 +38,8 @@
 - `APP_VERSION` **2.0.0**; artifact **`DirectTrans_v2.0.0.exe`** (`DirectTrans.spec`, `build.bat`).
 
 ### Known limitations
-- Open issues (RTF replace edge cases, special keys in hotkeys, complex clipboard restore): see [`issue.md`](issue.md).
-- Intentional product behavior (kill old `DirectTrans*` on exe launch, automatic fallback order, model reset on exe): see [`REVIEW_INTENT.md`](REVIEW_INTENT.md).
+- RTF replace, special keys in hotkeys, and complex clipboard cases still have edge cases (track internally or report via **Feedback**).
+- Intentional behavior: a new exe **stops** other `DirectTrans*` processes; provider fallback order is fixed; **frozen** builds reset default model names on each launch (API keys are kept).
 
 ## v1.0.12
 - **Settings on exe startup**: Packaged `.exe` always opens the Settings window when launched (reduces confusion after install).
@@ -48,7 +49,7 @@
 - **User manual (Vietnamese)**: Trimmed sections; documents auto-open Settings and Feedback.
 - **Hotkey dialog warning**: Added localized hint to avoid Space, F1–F12, Enter, Tab, etc. as the main key (mitigation until VK mapping is implemented).
 - **Single-instance signal file**: Open Settings only when `directtrans.signal` is deleted successfully; prevents repeated Settings focus every 2s if delete fails.
-- **RTF replace line alignment**: When translation line count differs from source paragraphs, merge extra lines into the last paragraph; partial fix for AI line-count mismatch (see `issue.md` §3).
+- **RTF replace line alignment**: When translation line count differs from source paragraphs, merge extra lines into the last paragraph; partial fix for AI line-count mismatch.
 - **Default models**: Gemini `gemini-flash-lite-latest`; Mistral `codestral-latest`. Mistral “Load Models” lists only `codestral-latest` and `ministral-8b-latest`.
 - **Google Free**: Try clients `dict-chrome-ex`, `at`, then `gtx` on `translate_a/single` when `gtx` returns 429.
 
