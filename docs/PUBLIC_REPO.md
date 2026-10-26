@@ -25,4 +25,4 @@ Repo **Direct-Trans** là **công khai**. Trước khi `git push`, đảm bảo 
 
 ## Duy trì sau này
 
-Mọi script `capture_*` coi như có thể đọc **config thật**. Khi cần ảnh public, dùng config mẫu tách biệt (file tạm / `DEFAULT_CONFIG`) hoặc chỉ commit ảnh đã review không có dữ liệu cá nhân.
+Mọi script `capture_*` coi như có thể đọc **config thật**. Ảnh public trong repo: chạy `python scripts/capture_ui_screenshots.py` — dùng `scripts/screenshot_config.py` (English UI, `DEFAULT_CONFIG`, không API key).

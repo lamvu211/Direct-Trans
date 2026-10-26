@@ -11,11 +11,12 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SRC = os.path.join(ROOT, "src")
+sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, SRC)
 
 from PySide6.QtWidgets import QApplication
 
-from config import Config
+from screenshot_config import POPUP_README_SAMPLE_TEXT, make_public_screenshot_config
 from ui.qt.hotkey_dialog import HotkeyDialog
 from ui.qt.hotkey_manage_dialog import HotkeyManageDialog
 from ui.qt.popup_window import QtPopupWindow
@@ -40,9 +41,8 @@ def main() -> int:
 
     set_qt_application(app)
 
-    config = Config()
+    config = make_public_screenshot_config()
     config.set_ui_theme("aurora_glass")
-    config.data["ui_language"] = "vi"
 
     win = QtSettingsWindow(config, None, None, None)
     win.show()
@@ -51,9 +51,7 @@ def main() -> int:
 
     popup = QtPopupWindow(config=config)
     popup.show(
-        translated_text=(
-            "Dự thảo sửa đổi quy định về mô hình quản lý, khai thác dữ liệu tập trung, thống nhất…"
-        ),
+        translated_text=POPUP_README_SAMPLE_TEXT,
         target_lang="English",
         target_lang_code="en",
         provider_key="gemini",
@@ -68,7 +66,7 @@ def main() -> int:
     paths.append(_save(hk, "screenshot_hotkey_dialog.png"))
     hk.close()
 
-    hk_m = HotkeyManageDialog(config, None, None, lambda: "vi")
+    hk_m = HotkeyManageDialog(config, None, None, lambda: config.data.get("ui_language", "en"))
     hk_m.show()
     app.processEvents()
     paths.append(_save(hk_m, "screenshot_hotkey_manage.png"))

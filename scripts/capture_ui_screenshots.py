@@ -10,6 +10,7 @@ import sys
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 SRC = os.path.join(ROOT, "src")
+sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, SRC)
 
 # Use native Windows compositor when available for real pixels.
@@ -20,7 +21,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import QApplication
 
-from config import Config
+from screenshot_config import POPUP_README_SAMPLE_TEXT, make_public_screenshot_config
 from ui.qt.hotkey_dialog import HotkeyDialog
 from ui.qt.hotkey_manage_dialog import HotkeyManageDialog
 from ui.qt.popup_window import QtPopupWindow
@@ -30,11 +31,13 @@ from ui.qt.widgets import apply_premium_app
 
 
 OUT_DIR = os.path.join(ROOT, "docs", "ui-review", "screenshots")
+ASSETS_DIR = os.path.join(SRC, "assets")
 
 
-def _save(widget, name: str) -> str:
-    os.makedirs(OUT_DIR, exist_ok=True)
-    path = os.path.join(OUT_DIR, name)
+def _save(widget, name: str, out_dir: str | None = None) -> str:
+    base = out_dir if out_dir is not None else OUT_DIR
+    os.makedirs(base, exist_ok=True)
+    path = os.path.join(base, name)
     widget.grab().save(path)
     return path
 
@@ -46,7 +49,7 @@ def main() -> int:
 
     set_qt_application(app)
 
-    config = Config()
+    config = make_public_screenshot_config()
     saved: list[str] = []
 
     for tid in THEME_IDS:
@@ -59,7 +62,7 @@ def main() -> int:
 
         popup = QtPopupWindow(config=config)
         popup.show(
-            translated_text="Sample translation for screenshot review.",
+            translated_text=POPUP_README_SAMPLE_TEXT,
             target_lang="English",
             target_lang_code="en",
             provider_key="gemini",
@@ -81,11 +84,23 @@ def main() -> int:
     saved.append(_save(hk, "hotkey_dialog_midnight_gold.png"))
     hk.close()
 
-    hk_m = HotkeyManageDialog(config, None, None, lambda: "vi")
+    hk_m = HotkeyManageDialog(config, None, None, lambda: config.data.get("ui_language", "en"))
     hk_m.show()
     app.processEvents()
     saved.append(_save(hk_m, "hotkey_manage_midnight_gold.png"))
     hk_m.close()
+
+    config.set_ui_theme("aurora_glass")
+    readme_popup = QtPopupWindow(config=config)
+    readme_popup.show(
+        translated_text=POPUP_README_SAMPLE_TEXT,
+        target_lang="English",
+        target_lang_code="en",
+        provider_key="gemini",
+    )
+    app.processEvents()
+    saved.append(_save(readme_popup.window, "screenshot_popup.png", out_dir=ASSETS_DIR))
+    readme_popup.close()
 
     print("Saved screenshots:")
     for p in saved:

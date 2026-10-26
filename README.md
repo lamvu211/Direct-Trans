@@ -20,7 +20,9 @@ Windows background app (system tray): select text in any application, press a gl
 
 ### Settings
 
-Single screen: **UI language** (Vietnamese, English, Korean, Chinese, Japanese), **theme** (Midnight Gold, Aurora Glass, Rose Champagne, Nord Snow), translation provider (Gemini / Groq / Mistral / Google Free), API key and model, hotkeys, Windows startup, update check, User manual, and Feedback.
+Single screen: **UI language** (Vietnamese, English, Korean, Chinese, Japanese), **theme** picker, translation provider (Gemini / Groq / Mistral / Google Free), API key and model, hotkeys, Windows startup, update check, User manual, and Feedback.
+
+**Themes (four options):** Midnight Gold (dark gold), Aurora Glass (dark glass), Rose Champagne (light rose), and **Nord Snow** (light frost / Nord-inspired palette with blue accent). Theme applies to Settings and the translation popup.
 
 Click thumbnails below for full-size shots, or expand each theme. Screenshots in this repo are generic UI review assets — see [docs/PUBLIC_REPO.md](docs/PUBLIC_REPO.md).
 
@@ -36,7 +38,7 @@ Click thumbnails below for full-size shots, or expand each theme. Screenshots in
       <a href="docs/ui-review/screenshots/settings_rose_champagne.png"><img src="docs/ui-review/screenshots/settings_rose_champagne.png" width="200" alt="Rose Champagne" /></a><br>Rose Champagne
     </td>
     <td align="center" width="25%">
-      Nord Snow<br><sub>Available in the app; no public review screenshot in this repo yet.</sub>
+      <a href="docs/ui-review/screenshots/settings_nord_snow.png"><img src="docs/ui-review/screenshots/settings_nord_snow.png" width="200" alt="Nord Snow" /></a><br>Nord Snow
     </td>
   </tr>
 </table>
@@ -52,6 +54,10 @@ Click thumbnails below for full-size shots, or expand each theme. Screenshots in
 <details>
 <summary>🔍 Rose Champagne</summary>
 <img src="docs/ui-review/screenshots/settings_rose_champagne.png" alt="Rose Champagne — Settings" />
+</details>
+<details>
+<summary>🔍 Nord Snow</summary>
+<img src="docs/ui-review/screenshots/settings_nord_snow.png" alt="Nord Snow — Settings" />
 </details>
 
 ### Translation popup
