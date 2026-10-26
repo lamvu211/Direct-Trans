@@ -1,5 +1,10 @@
 # Changelog
 
+## v2.0.3
+- **Startup**: Win32 loading UI via `bootstrap.py` (+10%/s until Settings); monochrome LOADING… bar design.
+- **UI**: Rose Champagne brand font matches other themes (Segoe UI); popup font/color tooltips localized (vi/en/ko/zh/ja); hotkey row tooltip follows UI language.
+- **Build**: `APP_VERSION` **2.0.3**; artifact **`DirectTrans_v2.0.3.exe`**; PyInstaller entry `bootstrap.py`.
+
 ## v2.0.2
 - **Theme**: **Nord Snow** (`nord_snow`) — light frost palette (fourth option in Settings / popup theme dropdown); per-theme popup font defaults; light color picker styling.
 - **Docs & samples**: README, user manual, PySide6 all-in-one samples; `docs/PUBLIC_REPO.md` (không commit ảnh/config cá nhân lên GitHub public).

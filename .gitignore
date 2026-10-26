@@ -36,6 +36,11 @@ config.json
 # Internal notes (not part of the product)
 hand-off.md
 issue.md
+REVIEW_INTENT.md
+release_notes.txt
+
+# Local build artifact at repo root (dist/ is canonical)
+/DirectTrans_v*.exe
 
 # Local UI captures (machine config may appear) — see docs/PUBLIC_REPO.md
 src/assets/readme/

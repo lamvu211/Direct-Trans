@@ -33,7 +33,7 @@ class _HotkeyRow(QFrame):
         self.setObjectName("hkRow")
         self.setFixedHeight(CONTROL_HEIGHT)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setToolTip(TRANSLATIONS["vi"].get("edit_hk_tip", "Double-click to edit"))
+        self.setToolTip("")
 
     def mouseDoubleClickEvent(self, event):
         self._on_edit(self._hk)
@@ -131,11 +131,12 @@ class HotkeySection(QWidget):
         self.setToolTip(tip)
 
     def _make_row(self, hk: dict) -> QFrame:
+        t = self._t()
         row = _HotkeyRow(hk, self._on_edit, self._delete)
+        row.setToolTip(t.get("edit_hk_tip", "Double-click to edit"))
         h = QHBoxLayout(row)
         h.setContentsMargins(8, 0, 4, 0)
         h.setSpacing(6)
-        t = self._t()
         mode = hk.get("mode", "popup")
         mode_label = t["popup_mode"] if mode == "popup" else t["replace_mode"]
 

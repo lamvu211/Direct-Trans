@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['src\\main.py'],
+    ['src\\bootstrap.py'],
     pathex=['src'],
     binaries=[],
     datas=[('src\\assets', 'assets')],
@@ -25,7 +25,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='DirectTrans_v2.0.2',
+    name='DirectTrans_v2.0.3',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

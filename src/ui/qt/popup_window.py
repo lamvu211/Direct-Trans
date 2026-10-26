@@ -71,6 +71,10 @@ class QtPopupWindow:
             "loading": "⏳ Đang dịch...",
             "replace_error": "Lỗi thay thế:",
             "status_by": "Dịch bởi {provider}",
+            "font_style_label": "Màu & cỡ chữ",
+            "color_picker_tip": "Chọn màu chữ kết quả dịch",
+            "font_decrease_tip": "Giảm cỡ chữ",
+            "font_increase_tip": "Tăng cỡ chữ",
         },
         "en": {
             "title_prefix": "Translate",
@@ -80,6 +84,10 @@ class QtPopupWindow:
             "loading": "⏳ Translating...",
             "replace_error": "Replacement error:",
             "status_by": "Translated by {provider}",
+            "font_style_label": "Font color & size",
+            "color_picker_tip": "Choose result text color",
+            "font_decrease_tip": "Decrease font size",
+            "font_increase_tip": "Increase font size",
         },
         "ko": {
             "title_prefix": "번역",
@@ -89,6 +97,10 @@ class QtPopupWindow:
             "loading": "⏳ 번역 중...",
             "replace_error": "교체 오류:",
             "status_by": "{provider}로 번역됨",
+            "font_style_label": "글자 색·크기",
+            "color_picker_tip": "번역 결과 글자 색 선택",
+            "font_decrease_tip": "글자 크기 줄이기",
+            "font_increase_tip": "글자 크기 늘리기",
         },
         "zh": {
             "title_prefix": "翻译",
@@ -98,6 +110,10 @@ class QtPopupWindow:
             "loading": "⏳ 正在翻译...",
             "replace_error": "替换错误:",
             "status_by": "由 {provider} 翻译",
+            "font_style_label": "字体颜色与大小",
+            "color_picker_tip": "选择译文文字颜色",
+            "font_decrease_tip": "减小字号",
+            "font_increase_tip": "增大字号",
         },
         "ja": {
             "title_prefix": "翻訳",
@@ -107,6 +123,10 @@ class QtPopupWindow:
             "loading": "⏳ 翻訳中...",
             "replace_error": "置換エラー:",
             "status_by": "{provider} で翻訳",
+            "font_style_label": "文字色とサイズ",
+            "color_picker_tip": "翻訳結果の文字色を選択",
+            "font_decrease_tip": "文字サイズを小さく",
+            "font_increase_tip": "文字サイズを大きく",
         },
     }
 
@@ -138,7 +158,7 @@ class QtPopupWindow:
         return self.config.data.get("ui_language", "vi") if self.config else "vi"
 
     def _t(self):
-        return self.TRANSLATIONS.get(self._ui_lang(), self.TRANSLATIONS["vi"])
+        return self.TRANSLATIONS.get(self._ui_lang(), self.TRANSLATIONS["en"])
 
     def _ensure_app(self):
         if QApplication.instance() is None:
@@ -237,7 +257,7 @@ class QtPopupWindow:
         header.addSpacing(6)
 
         # 2. Cụm Font color & size: text có màu giống Translated by... (statusBy)
-        style_lbl = QLabel("Font color & size")
+        style_lbl = QLabel(t.get("font_style_label", "Font color & size"))
         style_lbl.setObjectName("statusBy")
         header.addWidget(style_lbl, 0, Qt.AlignmentFlag.AlignVCenter)
         header.addSpacing(4)
@@ -248,7 +268,7 @@ class QtPopupWindow:
         self.color_btn.setObjectName("colorBtn")
         self.color_btn.setFixedSize(90, 30)
         self.color_btn.setIcon(_make_swatch_icon(self._current_font_color))
-        self.color_btn.setToolTip("Chọn màu chữ kết quả dịch")
+        self.color_btn.setToolTip(t.get("color_picker_tip", "Choose result text color"))
         self.color_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.color_btn.clicked.connect(self._open_color_picker)
         header.addWidget(self.color_btn, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -265,7 +285,7 @@ class QtPopupWindow:
         minus_btn = QPushButton("−")
         minus_btn.setObjectName("sizeBtn")
         minus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        minus_btn.setToolTip("Giảm cỡ chữ")
+        minus_btn.setToolTip(t.get("font_decrease_tip", "Decrease font size"))
         minus_btn.clicked.connect(self._on_decrease_font_size)
         size_lay.addWidget(minus_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
@@ -277,7 +297,7 @@ class QtPopupWindow:
         plus_btn = QPushButton("+")
         plus_btn.setObjectName("sizeBtn")
         plus_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        plus_btn.setToolTip("Tăng cỡ chữ")
+        plus_btn.setToolTip(t.get("font_increase_tip", "Increase font size"))
         plus_btn.clicked.connect(self._on_increase_font_size)
         size_lay.addWidget(plus_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 

@@ -456,7 +456,6 @@ QFrame#footBar {
 }
 QLabel#brand {
     color: #4a1942;
-    font-family: Georgia;
     font-size: 12pt;
     font-weight: 700;
 }

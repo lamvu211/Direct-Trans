@@ -8,7 +8,7 @@ Repo **Direct-Trans** là **công khai**. Trước khi `git push`, đảm bảo 
 | **Bí mật / API** | API key, token, mật khẩu, nội dung key trong ảnh chụp màn hình | Kể cả key che bằng `••••` — vẫn lộ provider, model, thói quen dùng |
 | **Ảnh chụp UI trên máy dev** | `src/assets/readme/`, `docs/ui-review/v2.0.1-nord-preview/`, `light_candidate_*.png` | Script capture dùng `Config()` thật → ảnh phản ánh máy bạn |
 | **Log / trace** | `directtrans.log`, `boot_trace.txt` | Đã ignore |
-| **Ghi chú nội bộ** | `hand-off.md`, `issue.md` | Đã ignore |
+| **Ghi chú nội bộ** | `hand-off.md`, `issue.md`, `REVIEW_INTENT.md`, `release_notes.txt` | Đã ignore |
 
 ## Ảnh README / user manual
 

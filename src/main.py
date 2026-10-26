@@ -150,6 +150,8 @@ class DirectTransApp:
         self.tray = None
         self.hotkey_manager = None
         self.settings_window = None
+        self._startup_splash = None
+        self._win32_startup_splash = None
         self.translation_thread = None
         self._processing_lock = threading.Lock()
         self.config._theme_listener = self._on_ui_theme_changed
@@ -218,6 +220,12 @@ class DirectTransApp:
         if os.path.exists(app_icon_path):
             self.qt_app.setWindowIcon(QIcon(app_icon_path))
         set_qt_application(self.qt_app)
+
+        if not getattr(self, "_win32_startup_splash", None) and self.config.needs_setup():
+            from ui.qt.startup_splash import StartupSplash
+
+            self._startup_splash = StartupSplash()
+            self._startup_splash.show_and_pulse()
         self._run_on_main = run_on_main
         self._schedule_ms = schedule_ms
         self._gui_ready = True
@@ -478,6 +486,24 @@ class DirectTransApp:
         finally:
             self._processing_lock.release()
 
+    def _dismiss_startup_splash(self) -> None:
+        win32_splash = getattr(self, "_win32_startup_splash", None)
+        if win32_splash is not None:
+            self._win32_startup_splash = None
+            try:
+                win32_splash.close()
+            except Exception:
+                logging.exception("Failed to close Win32 startup splash")
+
+        splash = self._startup_splash
+        if splash is None:
+            return
+        self._startup_splash = None
+        try:
+            splash.finish()
+        except Exception:
+            logging.exception("Failed to close startup splash")
+
     def _show_settings(self):
         """Open settings window."""
         if not self._gui_ready:
@@ -500,6 +526,8 @@ class DirectTransApp:
             logging.info("Settings window opened.")
         except Exception as e:
             logging.exception("Failed to open settings window: %s", e)
+        finally:
+            self._dismiss_startup_splash()
 
     def _heal_auto_start_path(self):
         """If auto-start is enabled, update registry to point to the current exe.
@@ -552,6 +580,7 @@ class DirectTransApp:
         preventing the app from hanging in the background.
         """
         logging.info("=== DirectTrans Shutting Down ===")
+        self._dismiss_startup_splash()
         if self.hotkey_manager:
             self.hotkey_manager.stop()
         if self.tray:
@@ -566,8 +595,8 @@ class DirectTransApp:
         os._exit(0)
 
 
-if __name__ == '__main__':
-    # Kill before mutex: otherwise the new exe exits and sends SHOW to the old one.
+def run_app(win32_startup_splash=None) -> None:
+    """Entry from bootstrap.py (exe) or ``python main.py`` (dev)."""
     if getattr(sys, "frozen", False):
         _boot_trace("boot: before kill_old_processes")
         kill_old_processes()
@@ -576,4 +605,9 @@ if __name__ == '__main__':
     _boot_trace("boot: after check_single_instance")
 
     app = DirectTransApp()
+    app._win32_startup_splash = win32_startup_splash
     app.run()
+
+
+if __name__ == "__main__":
+    run_app()
