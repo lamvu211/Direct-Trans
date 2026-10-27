@@ -17,8 +17,229 @@ CF_RTF = win32clipboard.RegisterClipboardFormat("Rich Text Format")
 # Wait after Ctrl+V before restoring the user's clipboard (slow apps need more time).
 CLIPBOARD_PASTE_SETTLE_DELAY = 0.65
 
+# Substrings of registered clipboard format names that indicate Excel / spreadsheet copy.
+_EXCEL_CLIPBOARD_NAME_FRAGMENTS = (
+    "biff",
+    "excel",
+    "sheet",
+    "worksheet",
+    "workbook",
+)
+
 
 class ClipboardUtil:
+
+    @staticmethod
+    def _extract_clipboard_hints(data_dict: dict) -> dict:
+        """Detect source app traits from formats present after Ctrl+C."""
+        excel = False
+        for fmt in data_dict:
+            try:
+                name = win32clipboard.GetClipboardFormatName(fmt)
+            except Exception:
+                continue
+            if not name:
+                continue
+            lower = name.lower()
+            if any(frag in lower for frag in _EXCEL_CLIPBOARD_NAME_FRAGMENTS):
+                excel = True
+                break
+        return {"excel": excel}
+
+    @staticmethod
+    def should_prefer_unicode_paste(
+        clipboard_hints: dict | None,
+        original_text: str | None,
+        translated_text: str,
+        original_rtf: bytes | None = None,
+    ) -> bool:
+        """
+        Excel (and similar) mishandles RTF: each \\par becomes a new row, and \\uN
+        escapes often render as '?'. Paste plain Unicode for in-cell / spreadsheet content.
+        """
+        hints = clipboard_hints or {}
+        if hints.get("excel"):
+            return True
+        text = original_text or ""
+        if "\t" in text:
+            return False
+        normalized = text.replace("\r\n", "\n").replace("\x0b", "\n")
+        nonempty = [ln for ln in normalized.split("\n") if ln.strip()]
+        if len(nonempty) > 1:
+            return True
+        if original_rtf and any(ord(c) > 127 for c in translated_text):
+            if RTFManipulator._rtf_likely_excel(original_rtf):
+                return True
+        return False
+
+    @staticmethod
+    def _normalize_selected_plain_text(txt: str, excel: bool) -> str:
+        """
+        Excel uses LF (\\n) inside a cell and CRLF (\\r\\n) between rows.
+        Do not collapse CRLF to LF for Excel or row boundaries are lost.
+        """
+        text = txt.replace("\x0b", "\n")
+        if excel:
+            return text
+        return text.replace("\r\n", "\n")
+
+    @staticmethod
+    def parse_excel_clipboard(text: str) -> list[list[str]]:
+        """
+        Parse Excel CF_UNICODETEXT (tab-separated, CRLF rows, quoted fields).
+        """
+        if not text:
+            return [[""]]
+        grid: list[list[str]] = []
+        row: list[str] = []
+        cell: list[str] = []
+        in_quotes = False
+        i = 0
+        n = len(text)
+        while i < n:
+            ch = text[i]
+            if in_quotes:
+                if ch == '"':
+                    if i + 1 < n and text[i + 1] == '"':
+                        cell.append('"')
+                        i += 2
+                        continue
+                    in_quotes = False
+                    i += 1
+                    continue
+                cell.append(ch)
+                i += 1
+                continue
+            if ch == '"':
+                in_quotes = True
+                i += 1
+                continue
+            if ch == "\t":
+                row.append("".join(cell))
+                cell = []
+                i += 1
+                continue
+            if ch == "\r":
+                if i + 1 < n and text[i + 1] == "\n":
+                    row.append("".join(cell))
+                    cell = []
+                    grid.append(row)
+                    row = []
+                    i += 2
+                    continue
+                cell.append(ch)
+                i += 1
+                continue
+            if ch == "\n":
+                row.append("".join(cell))
+                cell = []
+                grid.append(row)
+                row = []
+                i += 1
+                continue
+            cell.append(ch)
+            i += 1
+        row.append("".join(cell))
+        grid.append(row)
+        return grid
+
+    @staticmethod
+    def serialize_excel_clipboard(grid: list[list[str]], quote_all_cells: bool = True) -> str:
+        """Serialize grid for Excel paste; quote fields so in-cell newlines stay in one cell."""
+        lines: list[str] = []
+        for row in grid:
+            fields = [
+                ClipboardUtil._excel_quote_cell(cell, force=quote_all_cells)
+                for cell in row
+            ]
+            lines.append("\t".join(fields))
+        return "\r\n".join(lines)
+
+    @staticmethod
+    def _excel_quote_cell(cell: str, force: bool = True) -> str:
+        normalized = cell.replace("\r\n", "\n").replace("\r", "\n")
+        if not force and "\t" not in normalized and "\n" not in normalized and '"' not in normalized:
+            return normalized
+        escaped = normalized.replace('"', '""')
+        return f'"{escaped}"'
+
+    @staticmethod
+    def excel_grid_shape(grid: list[list[str]]) -> tuple[int, int]:
+        rows = len(grid)
+        cols = max((len(r) for r in grid), default=1)
+        return rows, cols
+
+    @staticmethod
+    def excel_grid_to_display(grid: list[list[str]]) -> str:
+        """Human-readable text for popup (CRLF between rows, tab between columns)."""
+        row_parts: list[str] = []
+        for row in grid:
+            cells = [c.replace("\r\n", "\n").replace("\r", "\n") for c in row]
+            row_parts.append("\t".join(cells))
+        return "\r\n".join(row_parts)
+
+    @staticmethod
+    def excel_display_to_grid(display_text: str, shape: tuple[int, int]) -> list[list[str]]:
+        """Map edited popup text back to a grid with the same row/column shape."""
+        rows, cols = shape
+        if "\r\n" in display_text:
+            raw_rows = display_text.split("\r\n")
+        else:
+            text = display_text.replace("\r", "\n")
+            raw_rows = text.split("\n")
+            if len(raw_rows) > rows:
+                merged_tail = "\n".join(raw_rows[rows - 1 :])
+                raw_rows = raw_rows[: rows - 1] + [merged_tail]
+        if len(raw_rows) < rows:
+            raw_rows.extend([""] * (rows - len(raw_rows)))
+        elif len(raw_rows) > rows:
+            raw_rows = raw_rows[:rows]
+        grid: list[list[str]] = []
+        for r in range(rows):
+            line = raw_rows[r] if r < len(raw_rows) else ""
+            parts = line.split("\t") if cols > 1 else [line]
+            if len(parts) < cols:
+                parts.extend([""] * (cols - len(parts)))
+            elif len(parts) > cols:
+                parts = parts[: cols - 1] + ["\t".join(parts[cols - 1 :])]
+            grid.append(parts)
+        return grid
+
+    @staticmethod
+    def coerce_excel_paste_text(translated_text: str, original_text: str | None) -> str:
+        """
+        Excel paste: use model output as-is when quotes are preserved.
+        If the model dropped quotes but the source was one quoted cell, re-wrap.
+        """
+        translated = translated_text
+        original = original_text or ""
+        if '"' in translated or '"' not in original:
+            return translated
+        grid = ClipboardUtil.parse_excel_clipboard(original)
+        if len(grid) == 1 and len(grid[0]) == 1:
+            inner = grid[0][0].replace("\r\n", "\n").replace("\r", "\n")
+            body = translated.replace("\r\n", "\n").replace("\r", "\n")
+            if body == inner:
+                return original
+            escaped = body.replace('"', '""')
+            return f'"{escaped}"'
+        return translated
+
+    @staticmethod
+    def _format_clipboard_paste_text(
+        translated_text: str,
+        original_text: str | None,
+        clipboard_hints: dict | None,
+        use_unicode_only: bool,
+    ) -> str:
+        hints = clipboard_hints or {}
+        if hints.get("excel"):
+            return ClipboardUtil.coerce_excel_paste_text(
+                translated_text, original_text
+            )
+        if use_unicode_only:
+            return translated_text.replace("\r\n", "\n")
+        return translated_text.replace("\n", "\r\n").replace("\r\r\n", "\r\n")
 
     @staticmethod
     def _focus_window(hwnd: int | None) -> None:
@@ -35,7 +256,7 @@ class ClipboardUtil:
     def get_selected_text() -> tuple:
         """
         Get the currently selected text from the active application.
-        Returns: (plain_text, rtf_data_or_None)
+        Returns: (plain_text, rtf_data_or_None, clipboard_hints)
         """
         # Backup current clipboard
         backup_dict = ClipboardUtil._read_clipboard()
@@ -87,13 +308,17 @@ class ClipboardUtil:
         # Đợi clipboard cập nhật (tối đa 500ms, kiểm tra mỗi 50ms)
         selected_text = ""
         selected_rtf = None
+        clipboard_hints = {"excel": False}
         for _ in range(10):
             time.sleep(0.05)
             current_dict = ClipboardUtil._read_clipboard()
             txt = current_dict.get(win32con.CF_UNICODETEXT, "")
             # Need to normalize txt if it exists
             if isinstance(txt, str) and txt != sentinel:
-                selected_text = txt.replace('\r\n', '\n').replace('\x0b', '\n')
+                clipboard_hints = ClipboardUtil._extract_clipboard_hints(current_dict)
+                selected_text = ClipboardUtil._normalize_selected_plain_text(
+                    txt, excel=clipboard_hints.get("excel", False)
+                )
                 selected_rtf = current_dict.get(CF_RTF)
                 break
 
@@ -105,8 +330,13 @@ class ClipboardUtil:
             selected_text = ""
             selected_rtf = None
 
-        logging.info(f"Clipboard read. Got text length: {len(selected_text)}, RTF present: {bool(selected_rtf)}")
-        return selected_text, selected_rtf
+        logging.info(
+            "Clipboard read. Got text length: %s, RTF present: %s, excel_like: %s",
+            len(selected_text),
+            bool(selected_rtf),
+            clipboard_hints.get("excel"),
+        )
+        return selected_text, selected_rtf, clipboard_hints
 
     @staticmethod
     def replace_selected_text(
@@ -115,6 +345,7 @@ class ClipboardUtil:
         target_lang: str,
         original_text: str | None = None,
         target_hwnd: int | None = None,
+        clipboard_hints: dict | None = None,
     ):
         """
         Replace the selected text with translated text, preserving formatting.
@@ -123,13 +354,28 @@ class ClipboardUtil:
         backup_dict = ClipboardUtil._read_clipboard()
 
         write_dict = {}
-        if original_rtf:
+        use_unicode_only = ClipboardUtil.should_prefer_unicode_paste(
+            clipboard_hints,
+            original_text,
+            translated_text,
+            original_rtf=original_rtf,
+        )
+        if original_rtf and not use_unicode_only:
             new_rtf = RTFManipulator.replace_text_preserve_format(
                 original_rtf, translated_text, target_lang, original_text=original_text
             )
             write_dict[CF_RTF] = new_rtf
-            
-        formatted_text = translated_text.replace('\n', '\r\n').replace('\r\r\n', '\r\n')
+        elif use_unicode_only:
+            logging.info(
+                "Replace paste: using Unicode text only (spreadsheet / in-cell multiline)."
+            )
+
+        formatted_text = ClipboardUtil._format_clipboard_paste_text(
+            translated_text,
+            original_text,
+            clipboard_hints,
+            use_unicode_only,
+        )
         write_dict[win32con.CF_UNICODETEXT] = formatted_text
         ClipboardUtil._write_clipboard(write_dict)
 
@@ -251,6 +497,21 @@ class ClipboardUtil:
 
 class RTFManipulator:
     """RTF manipulation: replace text while preserving formatting, change font per target language."""
+
+    @staticmethod
+    def _rtf_likely_excel(rtf: bytes) -> bool:
+        """Heuristic: compact RTF without Word stylesheet (typical Excel cell copy)."""
+        try:
+            sample = rtf[:4000].decode("latin-1", errors="ignore").lower()
+        except Exception:
+            return False
+        if "\\stylesheet" in sample:
+            return False
+        if "msftedit word" in sample or "microsoft word" in sample:
+            return False
+        if "\\fonttbl" not in sample:
+            return False
+        return len(rtf) < 12000
 
     @staticmethod
     def _align_translation_lines(translated_lines: list, num_text_paragraphs: int) -> list:

@@ -39,6 +39,10 @@ issue.md
 REVIEW_INTENT.md
 release_notes.txt
 
+# Prompt backup / sample docs (canonical: SYSTEM_PROMPT.md, src/translator.py)
+SYSTEM_PROMPT.original.md
+samples/settings_pyside6/LIGHT_CANDIDATES.md
+
 # Local build artifact at repo root (dist/ is canonical)
 /DirectTrans_v*.exe
 

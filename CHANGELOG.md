@@ -1,8 +1,13 @@
 # Changelog
 
+## v2.0.6
+- **Replace / Excel**: Unicode-only paste (no RTF) when copying from Excel; preserve raw quoted TSV from clipboard through translation (`EXCEL_LAYOUT_ADDON`); coerce quotes for single-cell paste if the model drops them. Fixes split rows, lost diacritics (`?`), and multi-cell structure when quotes are kept.
+- **Translation**: Expanded system prompt documented in `SYSTEM_PROMPT.md`; Excel layout addon in `src/translator.py`.
+- **Build**: `APP_VERSION` **2.0.6**; artifact **`DirectTrans_v2.0.6.exe`**.
+
 ## v2.0.5
 - **Win11 / high-DPI**: DPI awareness before Win32 splash; splash scales with monitor DPI and handles `WM_DPICHANGED`. Tray starts after Qt is ready; deferred menu refresh; plain-text tray labels (no emoji).
-- **Translation**: Updated compact system prompt (see `SYSTEM_PROMPT.md`): literal `<text>` handling, register/terminology, abbreviations, name transliteration, preserved Mr./Ms./etc. without inferring job titles.
+- **Translation**: Restored expanded system prompt from `SYSTEM_PROMPT.original.md` (reordered OUTPUT/INPUT/CONTEXT/TERMINOLOGY; no `<text>` echo in output; `{target_lang}` romanization; personal titles rule). See `SYSTEM_PROMPT.md`. Post-process strips leaked `<text>` wrappers.
 - **Replace**: Before Ctrl+V, focus returns to the window where you selected text (hotkey Replace and popup Replace); reduces pasting into the wrong app after a slow translation.
 - **Clipboard**: Wait **650ms** after paste before restoring the previous clipboard (was 400ms) to reduce wrong-content paste on slow hosts.
 - **Translation**: Clearer errors when Gemini / Groq / Mistral block, return empty, or malformed responses; strip multiple model “reasoning” blocks (`think`, `redacted_thinking`, `thinking`) from output.

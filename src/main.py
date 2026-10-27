@@ -346,6 +346,7 @@ class DirectTransApp:
         original_hwnd,
         selected_text: str,
         provider_used: str,
+        clipboard_hints: dict | None = None,
     ):
         def show():
             p = PopupWindow(self.config)
@@ -357,6 +358,7 @@ class DirectTransApp:
                 original_hwnd=original_hwnd,
                 original_text=selected_text,
                 provider_key=provider_used,
+                clipboard_hints=clipboard_hints,
             )
         self._run_on_main(show)
 
@@ -379,7 +381,7 @@ class DirectTransApp:
 
             # 1. Get selected text
             try:
-                selected_text, selected_rtf = ClipboardUtil.get_selected_text()
+                selected_text, selected_rtf, clipboard_hints = ClipboardUtil.get_selected_text()
             except Exception as e:
                 logging.error(f"Failed to get selected text from clipboard: {e}")
                 self._show_error_popup(
@@ -417,6 +419,7 @@ class DirectTransApp:
                         target_lang_code=target_lang_code,
                         original_hwnd=original_hwnd,
                         original_text=selected_text,
+                        clipboard_hints=clipboard_hints,
                     )
                     popup = p
                     popup_event.set()
@@ -431,8 +434,17 @@ class DirectTransApp:
             # 3. Translate
             try:
                 logging.info(f"Starting translation process to {target_lang_name} ({target_lang_code})...")
-                translation = self.translator.translate(selected_text, target_lang_name, target_lang_code)
+                translation = self.translator.translate(
+                    selected_text,
+                    target_lang_name,
+                    target_lang_code,
+                    preserve_excel_layout=bool(clipboard_hints.get("excel")),
+                )
                 translated = translation.text
+                if clipboard_hints.get("excel"):
+                    translated = ClipboardUtil.coerce_excel_paste_text(
+                        translated, selected_text
+                    )
                 provider_used = translation.provider
                 logging.info("Translation process completed successfully.")
             except Exception as e:
@@ -465,6 +477,7 @@ class DirectTransApp:
                         original_hwnd,
                         selected_text,
                         provider_used,
+                        clipboard_hints,
                     )
             elif mode == MODE_REPLACE:
                 try:
@@ -474,6 +487,7 @@ class DirectTransApp:
                         target_lang_code,
                         original_text=selected_text,
                         target_hwnd=original_hwnd,
+                        clipboard_hints=clipboard_hints,
                     )
                 except Exception:
                     def show_fallback():
@@ -486,6 +500,7 @@ class DirectTransApp:
                             original_hwnd=original_hwnd,
                             original_text=selected_text,
                             provider_key=provider_used,
+                            clipboard_hints=clipboard_hints,
                         )
                     self._run_on_main(show_fallback)
         finally:

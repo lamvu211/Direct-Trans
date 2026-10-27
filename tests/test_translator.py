@@ -62,6 +62,16 @@ class TestTranslator(unittest.TestCase):
             clean_model_output(f"<{redacted}>x</{redacted}>Hello"),
             "Hello",
         )
+        self.assertEqual(
+            clean_model_output(
+                "<text>\nCố định Pemnut vào sản phẩm\nƯu điểm: Giảm tỷ lệ lệch tâm của đai ốc\n</text>"
+            ),
+            "Cố định Pemnut vào sản phẩm\nƯu điểm: Giảm tỷ lệ lệch tâm của đai ốc",
+        )
+        self.assertEqual(
+            clean_model_output("<text>Hello</text>"),
+            "Hello",
+        )
 
     @patch('translator.requests.post')
     def test_groq_translator(self, mock_post):

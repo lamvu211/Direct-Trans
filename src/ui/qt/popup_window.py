@@ -160,6 +160,7 @@ class QtPopupWindow:
         self._current_font_color = "#B1B9E5"
         self._current_font_size = 12
         self.original_hwnd = None
+        self.clipboard_hints = None
         self._copy_reset_timer: QTimer | None = None
         self._state = STATE_READY
 
@@ -185,10 +186,12 @@ class QtPopupWindow:
         original_hwnd: int = None,
         original_text: str = None,
         provider_key: str = None,
+        clipboard_hints: dict | None = None,
     ):
         self._ensure_app()
         self.original_rtf = original_rtf
         self.original_text = original_text
+        self.clipboard_hints = clipboard_hints
         self.target_lang_code = target_lang_code
         self.translated_text = translated_text
         self.provider_key = provider_key
@@ -603,12 +606,18 @@ class QtPopupWindow:
         def perform_paste():
             time.sleep(0.25)
             try:
+                paste_text = (
+                    self.text_widget.toPlainText()
+                    if self.text_widget
+                    else self.translated_text
+                )
                 ClipboardUtil.replace_selected_text(
-                    self.translated_text,
+                    paste_text,
                     self.original_rtf,
                     self.target_lang_code,
                     original_text=self.original_text,
                     target_hwnd=target_hwnd,
+                    clipboard_hints=self.clipboard_hints,
                 )
             except Exception as e:
                 logging.error("Error replacing text from popup: %s", e)

@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from clipboard_util import RTFManipulator
+from clipboard_util import ClipboardUtil, RTFManipulator
 
 
 SIMPLE_RTF = (
@@ -29,6 +29,93 @@ NESTED_BRACE_RTF = (
     r'}'
 )
 
+
+
+class TestUnicodePasteHeuristics(unittest.TestCase):
+    def test_multiline_single_column_prefers_unicode(self):
+        self.assertTrue(
+            ClipboardUtil.should_prefer_unicode_paste(
+                {"excel": False},
+                "Line one\nLine two\nLine three",
+                "Dòng một\nDòng hai",
+            )
+        )
+
+    def test_tabbed_excel_still_prefers_unicode(self):
+        self.assertTrue(
+            ClipboardUtil.should_prefer_unicode_paste(
+                {"excel": True},
+                "A\tB\r\nC\tD",
+                "X\tY\r\nZ\tW",
+            )
+        )
+
+    def test_excel_parse_quoted_multiline_cell(self):
+        raw = '"line1\nline2"\r\nsecond'
+        grid = ClipboardUtil.parse_excel_clipboard(raw)
+        self.assertEqual(grid, [["line1\nline2"], ["second"]])
+
+    def test_excel_serialize_quotes_each_cell(self):
+        grid = [["a\nb"], ["c"]]
+        out = ClipboardUtil.serialize_excel_clipboard(grid)
+        self.assertEqual(out, '"a\nb"\r\n"c"')
+
+    def test_excel_two_by_two_grid_roundtrip(self):
+        raw = "A\tB\r\nC\tD"
+        grid = ClipboardUtil.parse_excel_clipboard(raw)
+        self.assertEqual(grid, [["A", "B"], ["C", "D"]])
+        out = ClipboardUtil.serialize_excel_clipboard(grid)
+        self.assertEqual(
+            ClipboardUtil.parse_excel_clipboard(out),
+            grid,
+        )
+
+    def test_coerce_excel_paste_keeps_quoted_output(self):
+        self.assertEqual(
+            ClipboardUtil.coerce_excel_paste_text('"Xin chào"', '"Hello"'),
+            '"Xin chào"',
+        )
+
+    def test_coerce_excel_paste_rewraps_single_cell_if_quotes_dropped(self):
+        original = '"line1\nline2"'
+        self.assertEqual(
+            ClipboardUtil.coerce_excel_paste_text("v1\nv2", original),
+            '"v1\nv2"',
+        )
+
+    def test_normalize_preserves_excel_row_breaks(self):
+        raw = "a\nb\r\nc"
+        self.assertEqual(
+            ClipboardUtil._normalize_selected_plain_text(raw, excel=True),
+            "a\nb\r\nc",
+        )
+        self.assertEqual(
+            ClipboardUtil._normalize_selected_plain_text(raw, excel=False),
+            "a\nb\nc",
+        )
+
+    def test_excel_clipboard_hint_prefers_unicode(self):
+        self.assertTrue(
+            ClipboardUtil.should_prefer_unicode_paste(
+                {"excel": True},
+                "Single line",
+                "Một dòng có dấu",
+            )
+        )
+
+    def test_rtf_likely_excel_compact(self):
+        compact = (
+            r'{\rtf1\ansi\deff0{\fonttbl{\f0 Arial;}}\f0 Hi\par there}'
+        ).encode("latin-1")
+        self.assertTrue(RTFManipulator._rtf_likely_excel(compact))
+
+    def test_rtf_not_excel_when_word_stylesheet(self):
+        wordish = (
+            r'{\rtf1\ansi{\stylesheet{\s0 Normal;}{\fonttbl{\f0 Arial;}}}'
+            r'\f0 Hello'
+            r'}'
+        ).encode("latin-1")
+        self.assertFalse(RTFManipulator._rtf_likely_excel(wordish))
 
 
 class TestRTFTokenizer(unittest.TestCase):
