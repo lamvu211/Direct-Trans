@@ -1,6 +1,8 @@
 # Changelog
 
 ## v2.0.5
+- **Win11 / high-DPI**: DPI awareness before Win32 splash; splash scales with monitor DPI and handles `WM_DPICHANGED`. Tray starts after Qt is ready; deferred menu refresh; plain-text tray labels (no emoji).
+- **Translation**: Updated compact system prompt (see `SYSTEM_PROMPT.md`): literal `<text>` handling, register/terminology, abbreviations, name transliteration, preserved Mr./Ms./etc. without inferring job titles.
 - **Replace**: Before Ctrl+V, focus returns to the window where you selected text (hotkey Replace and popup Replace); reduces pasting into the wrong app after a slow translation.
 - **Clipboard**: Wait **650ms** after paste before restoring the previous clipboard (was 400ms) to reduce wrong-content paste on slow hosts.
 - **Translation**: Clearer errors when Gemini / Groq / Mistral block, return empty, or malformed responses; strip multiple model “reasoning” blocks (`think`, `redacted_thinking`, `thinking`) from output.
@@ -14,7 +16,7 @@
 - **Build**: `APP_VERSION` **2.0.4**; artifact **`DirectTrans_v2.0.4.exe`**.
 
 ## v2.0.3
-- **Startup (exe)**: **LOADING…** screen with progress bar (+10% per second, cap 100%) as soon as Python starts — `bootstrap.py` entry, Win32 splash on a background thread; closes when Settings appears.
+- **Startup (exe)**: **Loading** screen with soft UI progress bar (starts at 20%, +20% per second, cap 100%) as soon as Python starts — `bootstrap.py` entry, Win32 splash on a background thread; closes when Settings appears.
 - **UI**: Rose Champagne brand title uses Segoe UI like other themes; popup font/color labels and tooltips follow UI language; hotkey row tooltip respects locale.
 - **Repo**: Expanded `.gitignore` (logs, local exe, internal notes); updated `docs/PUBLIC_REPO.md`.
 - **Build**: `APP_VERSION` **2.0.3**; artifact **`DirectTrans_v2.0.3.exe`** (`DirectTrans.spec` → `src/bootstrap.py`).

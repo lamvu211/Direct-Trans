@@ -46,3 +46,7 @@ release_notes.txt
 src/assets/readme/
 docs/ui-review/v2.0.1-nord-preview/
 samples/settings_pyside6/output/light_candidate_*.png
+samples/sample_loading_preview.png
+
+# One-off prompt / translation experiments (local only)
+scripts/_*

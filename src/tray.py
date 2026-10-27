@@ -1,26 +1,27 @@
 """
 tray.py - System tray icon with menu using pystray.
-Runs on a background thread alongside Tkinter without thread conflicts or blocking.
+Runs on a background thread alongside Qt without blocking the GUI thread.
 """
 
 import os
 import sys
 import logging
+import threading
 import pystray
 from PIL import Image, ImageDraw, ImageFont
 
 TRAY_STRINGS = {
-    'vi': {'settings': '⚙ Cài đặt', 'quit': '❌ Thoát', 'enable': 'Bật', 'disable': 'Tắt'},
-    'en': {'settings': '⚙ Settings', 'quit': '❌ Quit', 'enable': 'Enable', 'disable': 'Disable'},
-    'ko': {'settings': '⚙ 설정', 'quit': '❌ 종료', 'enable': '활성화', 'disable': '비활성화'},
-    'zh': {'settings': '⚙ 设置', 'quit': '❌ 退出', 'enable': '启用', 'disable': '禁用'},
-    'ja': {'settings': '⚙ 設定', 'quit': '❌ 終了', 'enable': '有効', 'disable': '無効'},
+    'vi': {'settings': 'Cài đặt', 'quit': 'Thoát', 'enable': 'Bật', 'disable': 'Tắt'},
+    'en': {'settings': 'Settings', 'quit': 'Quit', 'enable': 'Enable', 'disable': 'Disable'},
+    'ko': {'settings': '설정', 'quit': '종료', 'enable': '활성화', 'disable': '비활성화'},
+    'zh': {'settings': '设置', 'quit': '退出', 'enable': '启用', 'disable': '禁用'},
+    'ja': {'settings': '設定', 'quit': '終了', 'enable': '有効', 'disable': '無効'},
 }
 
 class TrayIcon:
     def __init__(self, on_settings, on_toggle, on_quit, config=None, is_enabled=None):
         """
-        on_settings: callback to open Settings window (will be run on main thread via root.after)
+        on_settings: callback to open Settings window (marshaled to Qt main thread)
         on_toggle: callback to toggle translation on/off
         on_quit: callback to quit the app
         is_enabled: callable that returns current enabled state
@@ -31,11 +32,10 @@ class TrayIcon:
         self.is_enabled = is_enabled or (lambda: True)
         self.icon = None
         self.config = config
+        self._menu_update_timer: threading.Timer | None = None
 
-        # Load or create image
         image = self._load_icon_image()
 
-        # Build icon
         self.icon = pystray.Icon(
             "DirectTrans",
             image,
@@ -71,8 +71,7 @@ class TrayIcon:
                 return Image.open(icon_path)
             except Exception as e:
                 logging.error(f"Failed to load icon from path: {e}")
-        
-        # Fallback to default self-drawn icon if path does not exist or fails to load
+
         return self._create_default_icon()
 
     def _create_default_icon(self) -> Image.Image:
@@ -115,11 +114,29 @@ class TrayIcon:
             )
         )
 
-    def _toggle(self):
-        """Toggle enabled state and update menu."""
-        self.on_toggle()
-        if self.icon:
+    def _schedule_menu_refresh(self) -> None:
+        """Refresh menu after the context menu closes (avoids pystray deadlocks on Windows)."""
+        if not self.icon:
+            return
+        if self._menu_update_timer is not None:
+            self._menu_update_timer.cancel()
+        self._menu_update_timer = threading.Timer(0.15, self._apply_menu_refresh)
+        self._menu_update_timer.daemon = True
+        self._menu_update_timer.start()
+
+    def _apply_menu_refresh(self) -> None:
+        self._menu_update_timer = None
+        if not self.icon:
+            return
+        try:
             self.icon.update_menu()
+        except Exception as e:
+            logging.debug("Tray menu refresh skipped: %s", e)
+
+    def _toggle(self):
+        """Toggle enabled state and refresh menu label shortly after."""
+        self.on_toggle()
+        self._schedule_menu_refresh()
 
     def run(self):
         """Run the tray icon. This blocks, so it should be run in a separate thread."""
@@ -140,6 +157,9 @@ class TrayIcon:
 
     def stop(self):
         """Stop the tray icon."""
+        if self._menu_update_timer is not None:
+            self._menu_update_timer.cancel()
+            self._menu_update_timer = None
         if self.icon:
             try:
                 self.icon.stop()

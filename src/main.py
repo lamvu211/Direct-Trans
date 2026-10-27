@@ -186,17 +186,6 @@ class DirectTransApp:
 
     def run(self):
         """Start the application on the main thread."""
-        self.tray = TrayIcon(
-            on_settings=self._safe_show_settings,
-            on_toggle=self._safe_toggle_enabled,
-            on_quit=self._safe_quit,
-            config=self.config,
-            is_enabled=lambda: self.enabled
-        )
-        # Start pystray tray icon on a background thread
-        logging.info("Starting tray icon on background thread.")
-        threading.Thread(target=self.tray.run, daemon=True).start()
-
         self._run_qt()
 
     def _run_qt(self):
@@ -229,6 +218,16 @@ class DirectTransApp:
         self._run_on_main = run_on_main
         self._schedule_ms = schedule_ms
         self._gui_ready = True
+
+        self.tray = TrayIcon(
+            on_settings=self._safe_show_settings,
+            on_toggle=self._safe_toggle_enabled,
+            on_quit=self._safe_quit,
+            config=self.config,
+            is_enabled=lambda: self.enabled,
+        )
+        logging.info("Starting tray icon on background thread.")
+        threading.Thread(target=self.tray.run, daemon=True).start()
 
         self.hotkey_manager = HotkeyManager(self.config, self._on_hotkey)
         self.hotkey_manager.register_all()

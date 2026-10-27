@@ -10,6 +10,9 @@ if not getattr(sys, "frozen", False):
 
 _win32_splash = None
 if getattr(sys, "frozen", False):
+    from ui.dpi_util import enable_process_dpi_awareness
+
+    enable_process_dpi_awareness()
     from win32_startup_splash import Win32StartupSplash
 
     _win32_splash = Win32StartupSplash()
