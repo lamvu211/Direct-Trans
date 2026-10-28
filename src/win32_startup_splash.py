@@ -5,6 +5,7 @@ from __future__ import annotations
 import ctypes
 from ctypes import wintypes
 import threading
+import time
 
 from ui.dpi_util import scale_logical_px, win32_scale_factor, win32_system_dpi
 
@@ -228,16 +229,35 @@ class Win32StartupSplash:
         if self._closed:
             return
         self._closed = True
+        import win32gui
         hwnd = self._hwnd
         if hwnd:
-            user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
+            try:
+                win32gui.PostMessage(hwnd, WM_CLOSE, 0, 0)
+            except Exception:
+                pass
+            return
+        for _ in range(100):
+            if self._hwnd:
+                try:
+                    win32gui.PostMessage(self._hwnd, WM_CLOSE, 0, 0)
+                except Exception:
+                    pass
+                return
+            time.sleep(0.02)
 
     def _on_create(self, hwnd: int) -> None:
         self._hwnd = hwnd
+        if self._closed:
+            user32.DestroyWindow(hwnd)
+            self._hwnd = None
+            self._ready.set()
+            return
         self._sync_dpi(hwnd)
         self._create_fonts()
         user32.SetTimer(hwnd, 1, _PROGRESS_INTERVAL_MS, None)
         self._center(hwnd)
+        user32.ShowWindow(hwnd, 5)  # SW_SHOW — window created hidden to avoid (0,0) hit-test flash
         self._ready.set()
 
     def _on_dpichanged(self, hwnd: int, wparam: int, lparam: int) -> None:
@@ -457,7 +477,7 @@ class Win32StartupSplash:
             WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
             self._CLASS_NAME,
             "DirectTrans",
-            WS_POPUP | WS_VISIBLE,
+            WS_POPUP,
             0,
             0,
             win_w,

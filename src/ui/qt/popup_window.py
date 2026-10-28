@@ -51,6 +51,10 @@ class _ThemedPopupWidget(QWidget):
             return
         super().keyPressEvent(event)
 
+    def closeEvent(self, event):
+        self.owner.close()
+        event.accept()
+
 
 def _make_swatch_icon(color_hex: str, size: int = 14) -> QIcon:
     pm = QPixmap(size, size)
@@ -161,6 +165,7 @@ class QtPopupWindow:
         self._current_font_size = 12
         self.original_hwnd = None
         self.clipboard_hints = None
+        self.selection_state = None
         self._copy_reset_timer: QTimer | None = None
         self._state = STATE_READY
 
@@ -187,11 +192,13 @@ class QtPopupWindow:
         original_text: str = None,
         provider_key: str = None,
         clipboard_hints: dict | None = None,
+        selection_state: dict | None = None,
     ):
         self._ensure_app()
         self.original_rtf = original_rtf
         self.original_text = original_text
         self.clipboard_hints = clipboard_hints
+        self.selection_state = selection_state
         self.target_lang_code = target_lang_code
         self.translated_text = translated_text
         self.provider_key = provider_key
@@ -209,7 +216,9 @@ class QtPopupWindow:
         win = _ThemedPopupWidget(
             self,
             None,
-            Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint,
+            Qt.WindowType.Window
+            | Qt.WindowType.WindowStaysOnTopHint
+            | Qt.WindowType.WindowDoesNotAcceptFocus,
         )
         win.setObjectName("popupRoot")
         win.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -346,6 +355,14 @@ class QtPopupWindow:
         self.copy_btn.clicked.connect(self._copy)
         actions.addWidget(self.copy_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
+        self.close_btn = QPushButton("✕")
+        self.close_btn.setObjectName("sizeBtn")
+        self.close_btn.setFixedSize(24, 24)
+        self.close_btn.setToolTip("Close")
+        self.close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.close_btn.clicked.connect(self.close)
+        actions.addWidget(self.close_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+
         header.addLayout(actions)
         main.addWidget(header_container)
 
@@ -390,7 +407,6 @@ class QtPopupWindow:
         self._center_on_work_area(win)
         QTimer.singleShot(0, lambda w=win: self._center_on_work_area(w))
         win.raise_()
-        win.activateWindow()
 
     @staticmethod
     def _clamp_font_size(size: int) -> int:
@@ -604,13 +620,9 @@ class QtPopupWindow:
             self.window.hide()
 
         def perform_paste():
-            time.sleep(0.25)
+            time.sleep(0.08)
             try:
-                paste_text = (
-                    self.text_widget.toPlainText()
-                    if self.text_widget
-                    else self.translated_text
-                )
+                paste_text = self.translated_text or ""
                 ClipboardUtil.replace_selected_text(
                     paste_text,
                     self.original_rtf,
@@ -618,6 +630,7 @@ class QtPopupWindow:
                     original_text=self.original_text,
                     target_hwnd=target_hwnd,
                     clipboard_hints=self.clipboard_hints,
+                    selection_state=self.selection_state,
                 )
             except Exception as e:
                 logging.error("Error replacing text from popup: %s", e)

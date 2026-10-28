@@ -1,5 +1,23 @@
 # Changelog
 
+## v2.0.10
+- **WeChat**: Do not treat WeChat inputs as EM Edit (fake `EM_GETSEL`); skip `AttachThreadInput` on focus; re-select source with **Shift+Left** before Replace paste; WeChat-only single-step Ctrl+C copy.
+- **Stability**: Safer `AttachThreadInput` detach on errors (reduces sudden exit on WeChat focus).
+
+## v2.0.9
+- **Copy (regression fix)**: Restore modifier release before `keybd_event` Ctrl+C; add SendInput attempt first for CEF. Removed incorrect WeChat “reuse old clipboard” fallback (translated stale clipboard text).
+- **Replace**: `keybd_event` Ctrl+V; focus target window with `AttachThreadInput` + `SetFocus` on saved focus hwnd; longer delay before popup Replace paste.
+
+## v2.0.8
+- **WeChat / CEF**: Copy via `SendInput` before releasing hotkey modifiers; retry and reject stray lone `c`; reuse pre-hotkey clipboard when synthetic copy fails in WeChat.
+- **Replace**: Drop `AttachThreadInput` focus path (crash-prone); `EM_SETSEL` only on real Edit/RichEdit; log foreground process and paste focus.
+- **Startup splash**: Create hidden, show after center; destroy if closed before `WM_CREATE`; wait for hwnd on close (fixes top-left invisible blocker).
+
+## v2.0.7
+- **Replace**: Capture selection anchors (Edit/RichEdit) at copy time and restore before paste; stronger foreground focus (AttachThreadInput / AllowSetForegroundWindow). Popup Replace uses the same path.
+- **Replace / RTF**: Align translated line count to the original selection (keeps blank lines) before paste and RTF merge.
+- **Build**: `APP_VERSION` **2.0.7**; artifact **`DirectTrans_v2.0.7.exe`**.
+
 ## v2.0.6
 - **Replace / Excel**: Unicode-only paste (no RTF) when copying from Excel; preserve raw quoted TSV from clipboard through translation (`EXCEL_LAYOUT_ADDON`); coerce quotes for single-cell paste if the model drops them. Fixes split rows, lost diacritics (`?`), and multi-cell structure when quotes are kept.
 - **Translation**: Expanded system prompt documented in `SYSTEM_PROMPT.md`; Excel layout addon in `src/translator.py`.

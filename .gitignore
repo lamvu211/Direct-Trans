@@ -16,6 +16,7 @@ directtrans.signal
 boot_trace.txt
 
 # Debug / scratch at repo root
+scratch/
 _*.txt
 *_extracted/
 
@@ -38,6 +39,7 @@ hand-off.md
 issue.md
 REVIEW_INTENT.md
 release_notes.txt
+code-review-format.md
 
 # Prompt backup / sample docs (canonical: SYSTEM_PROMPT.md, src/translator.py)
 SYSTEM_PROMPT.original.md

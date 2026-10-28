@@ -29,6 +29,7 @@ class TestUiQaFixes(unittest.TestCase):
 
     def setUp(self):
         self.config = Config()
+        self.config.data['popup_styles'] = {}
         if not self.config.get_hotkeys():
             self.config.data['hotkeys'] = list(self.config.DEFAULT_CONFIG['hotkeys'])
 

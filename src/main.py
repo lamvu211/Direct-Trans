@@ -5,6 +5,7 @@ Orchestrates all components: config, tray, hotkeys, translation, clipboard, popu
 
 import sys
 import os
+import time
 import win32event
 import win32api
 import winerror
@@ -297,8 +298,18 @@ class DirectTransApp:
 
     def _on_hotkey(self, hotkey_config: dict):
         """Callback when user presses a registered hotkey."""
+        now = time.time()
+        if now - getattr(self, "_last_hotkey_time", 0.0) < 0.4:
+            # Debounce duplicate/bounced hotkey events within 400ms silently
+            return
+        self._last_hotkey_time = now
+
         if not self._processing_lock.acquire(blocking=False):
-            self._notify_hotkey_busy()
+            if now - getattr(self, "_last_busy_notify", 0.0) > 2.0:
+                self._last_busy_notify = now
+                self._notify_hotkey_busy()
+            else:
+                logging.info("Hotkey ignored: translation already in progress.")
             return
 
         if not self.enabled:
@@ -347,6 +358,7 @@ class DirectTransApp:
         selected_text: str,
         provider_used: str,
         clipboard_hints: dict | None = None,
+        selection_state: dict | None = None,
     ):
         def show():
             p = PopupWindow(self.config)
@@ -359,6 +371,7 @@ class DirectTransApp:
                 original_text=selected_text,
                 provider_key=provider_used,
                 clipboard_hints=clipboard_hints,
+                selection_state=selection_state,
             )
         self._run_on_main(show)
 
@@ -373,15 +386,19 @@ class DirectTransApp:
             ui_lang = self.config.data.get('ui_language', 'vi')
             msgs = TRANSLATIONS.get(ui_lang, TRANSLATIONS['en'])
 
-            import ctypes
+            import win32gui
             try:
-                original_hwnd = ctypes.windll.user32.GetForegroundWindow()
+                original_hwnd = win32gui.GetForegroundWindow()
+                if original_hwnd:
+                    original_hwnd = int(original_hwnd) & 0xFFFFFFFF
             except Exception:
                 original_hwnd = None
 
             # 1. Get selected text
             try:
-                selected_text, selected_rtf, clipboard_hints = ClipboardUtil.get_selected_text()
+                selected_text, selected_rtf, clipboard_hints, selection_state = (
+                    ClipboardUtil.get_selected_text()
+                )
             except Exception as e:
                 logging.error(f"Failed to get selected text from clipboard: {e}")
                 self._show_error_popup(
@@ -420,6 +437,7 @@ class DirectTransApp:
                         original_hwnd=original_hwnd,
                         original_text=selected_text,
                         clipboard_hints=clipboard_hints,
+                        selection_state=selection_state,
                     )
                     popup = p
                     popup_event.set()
@@ -444,6 +462,10 @@ class DirectTransApp:
                 if clipboard_hints.get("excel"):
                     translated = ClipboardUtil.coerce_excel_paste_text(
                         translated, selected_text
+                    )
+                else:
+                    translated = ClipboardUtil.align_translated_line_structure(
+                        selected_text, translated
                     )
                 provider_used = translation.provider
                 logging.info("Translation process completed successfully.")
@@ -478,6 +500,7 @@ class DirectTransApp:
                         selected_text,
                         provider_used,
                         clipboard_hints,
+                        selection_state,
                     )
             elif mode == MODE_REPLACE:
                 try:
@@ -488,6 +511,7 @@ class DirectTransApp:
                         original_text=selected_text,
                         target_hwnd=original_hwnd,
                         clipboard_hints=clipboard_hints,
+                        selection_state=selection_state,
                     )
                 except Exception:
                     def show_fallback():
@@ -501,6 +525,7 @@ class DirectTransApp:
                             original_text=selected_text,
                             provider_key=provider_used,
                             clipboard_hints=clipboard_hints,
+                            selection_state=selection_state,
                         )
                     self._run_on_main(show_fallback)
         finally:

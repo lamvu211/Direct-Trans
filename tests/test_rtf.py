@@ -31,6 +31,27 @@ NESTED_BRACE_RTF = (
 
 
 
+class TestLineStructureAlign(unittest.TestCase):
+    def test_align_inserts_blank_lines(self):
+        original = "Line one\n\nLine two"
+        translated = "Dòng một\nDòng hai"
+        out = ClipboardUtil.align_translated_line_structure(original, translated)
+        self.assertEqual(out.split("\n"), ["Dòng một", "", "Dòng hai"])
+
+    def test_align_preserves_crlf(self):
+        original = "A\r\n\r\nB"
+        translated = "X\nY"
+        out = ClipboardUtil.align_translated_line_structure(original, translated)
+        self.assertEqual(out, "X\r\n\r\nY")
+
+    def test_align_same_count_unchanged(self):
+        text = "a\nb"
+        self.assertEqual(
+            ClipboardUtil.align_translated_line_structure(text, "x\ny"),
+            "x\ny",
+        )
+
+
 class TestUnicodePasteHeuristics(unittest.TestCase):
     def test_multiline_single_column_prefers_unicode(self):
         self.assertTrue(

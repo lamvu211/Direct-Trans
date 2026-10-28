@@ -8,8 +8,8 @@ import re
 import win32clipboard
 import win32con
 import win32api
-import keyboard
 import logging
+import ctypes
 
 
 CF_RTF = win32clipboard.RegisterClipboardFormat("Rich Text Format")
@@ -30,6 +30,81 @@ _EXCEL_CLIPBOARD_NAME_FRAGMENTS = (
 class ClipboardUtil:
 
     @staticmethod
+    def _is_suspect_stray_c_copy(text: str) -> bool:
+        """Lone 'c' often means Ctrl+C degraded to typing 'c' in CEF editors (WeChat)."""
+        return len(text) == 1 and text in ("c", "C")
+
+    @staticmethod
+    def _copy_selection_to_clipboard() -> None:
+        """
+        Copy selected text to clipboard.
+        1. Try WM_COPY first (preserves selection in RichEdit/Edit controls without keystrokes).
+        2. Fallback to synthetic Ctrl+C after ensuring physical hotkey keys are released.
+        """
+        from selection_util import _foreground_focus_hwnd
+        import win32gui
+        focus_hwnd = _foreground_focus_hwnd()
+        if focus_hwnd and win32gui.IsWindow(focus_hwnd):
+            user32 = ctypes.windll.user32
+            user32.GetClipboardSequenceNumber.restype = ctypes.c_ulong
+            seq_before = user32.GetClipboardSequenceNumber()
+            try:
+                win32api.SendMessage(focus_hwnd, win32con.WM_COPY, 0, 0)
+                time.sleep(0.04)
+                if user32.GetClipboardSequenceNumber() != seq_before:
+                    # WM_COPY succeeded! Zero keystrokes sent, selection perfectly preserved!
+                    return
+            except Exception:
+                pass
+
+        # Fallback: wait briefly for physical hotkey keys to release so they don't leak as typed chars
+        from input_util import (
+            release_modifier_keys,
+            send_ctrl_c_keybd,
+            send_ctrl_c_sendinput,
+        )
+        from selection_util import is_wechat_foreground
+
+        start = time.time()
+        while time.time() - start < 0.2:
+            ctrl_down = win32api.GetAsyncKeyState(win32con.VK_CONTROL) & 0x8000
+            shift_down = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
+            v_down = win32api.GetAsyncKeyState(0x56) & 0x8000
+            if not (ctrl_down or shift_down or v_down):
+                break
+            time.sleep(0.02)
+
+        if is_wechat_foreground():
+            release_modifier_keys()
+            time.sleep(0.03)
+            send_ctrl_c_keybd()
+            return
+
+        send_ctrl_c_sendinput()
+        time.sleep(0.03)
+        release_modifier_keys()
+        time.sleep(0.03)
+        send_ctrl_c_keybd()
+
+    @staticmethod
+    def _poll_clipboard_after_copy(sentinel: str) -> tuple[str, dict | None, bytes | None]:
+        selected_text = ""
+        selected_rtf = None
+        clipboard_hints = {"excel": False}
+        for _ in range(12):
+            time.sleep(0.05)
+            current_dict = ClipboardUtil._read_clipboard()
+            txt = current_dict.get(win32con.CF_UNICODETEXT, "")
+            if isinstance(txt, str) and txt != sentinel:
+                clipboard_hints = ClipboardUtil._extract_clipboard_hints(current_dict)
+                selected_text = ClipboardUtil._normalize_selected_plain_text(
+                    txt, excel=clipboard_hints.get("excel", False)
+                )
+                selected_rtf = current_dict.get(CF_RTF)
+                break
+        return selected_text, clipboard_hints, selected_rtf
+
+    @staticmethod
     def _extract_clipboard_hints(data_dict: dict) -> dict:
         """Detect source app traits from formats present after Ctrl+C."""
         excel = False
@@ -45,6 +120,49 @@ class ClipboardUtil:
                 excel = True
                 break
         return {"excel": excel}
+
+    @staticmethod
+    def _split_logical_lines(text: str) -> list[str]:
+        return text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+
+    @staticmethod
+    def align_translated_line_structure(
+        original_text: str, translated_text: str
+    ) -> str:
+        """
+        Pad or merge translated lines so line count matches the original selection.
+        Preserves intentional blank lines from the source for RTF / Word paste.
+        """
+        if not original_text:
+            return translated_text
+        orig = ClipboardUtil._split_logical_lines(original_text)
+        trans = ClipboardUtil._split_logical_lines(translated_text)
+        if len(orig) == len(trans):
+            return translated_text
+
+        trans_nonempty = [line for line in trans if line.strip()]
+        out: list[str] = []
+        ti = 0
+        for line in orig:
+            if not line.strip():
+                out.append("")
+                continue
+            if ti < len(trans_nonempty):
+                out.append(trans_nonempty[ti])
+                ti += 1
+            else:
+                out.append("")
+        if ti < len(trans_nonempty):
+            for j in range(len(out) - 1, -1, -1):
+                if out[j]:
+                    out[j] = out[j] + "\n" + "\n".join(trans_nonempty[ti:])
+                    break
+            else:
+                out.append("\n".join(trans_nonempty[ti:]))
+
+        if "\r\n" in original_text:
+            return "\r\n".join(out)
+        return "\n".join(out)
 
     @staticmethod
     def should_prefer_unicode_paste(
@@ -242,101 +360,93 @@ class ClipboardUtil:
         return translated_text.replace("\n", "\r\n").replace("\r\r\n", "\r\n")
 
     @staticmethod
-    def _focus_window(hwnd: int | None) -> None:
-        if not hwnd:
-            return
-        try:
-            import ctypes
-            ctypes.windll.user32.SetForegroundWindow(hwnd)
-            time.sleep(0.05)
-        except Exception:
-            pass
-
-    @staticmethod
     def get_selected_text() -> tuple:
         """
         Get the currently selected text from the active application.
-        Returns: (plain_text, rtf_data_or_None, clipboard_hints)
+        Returns: (plain_text, rtf_data_or_None, clipboard_hints, selection_state)
         """
-        # Backup current clipboard
+        from selection_util import (
+            capture_focus_hint,
+            capture_selection,
+            foreground_process_basename,
+        )
+
+        selection_state = capture_selection() or capture_focus_hint()
+        fg_process = foreground_process_basename()
+
+        user32 = ctypes.windll.user32
+        user32.GetClipboardSequenceNumber.restype = ctypes.c_ulong
+        seq_before = user32.GetClipboardSequenceNumber()
+
+        # Backup current clipboard (safe formats only)
         backup_dict = ClipboardUtil._read_clipboard()
 
-        # Đặt một giá trị token đặc biệt để kiểm tra xem clipboard có được cập nhật bởi ctrl+c không
-        sentinel = f"__DIRECT_TRANS_SENTINEL_{time.time()}__"
-        ClipboardUtil._write_clipboard({win32con.CF_UNICODETEXT: sentinel})
+        ClipboardUtil._copy_selection_to_clipboard()
 
-        # Lazy import to avoid PyInstaller bundle issues (removed local imports to fix UnboundLocalError)
-        modifiers = [
-            (0xA0, 0), # VK_LSHIFT
-            (0xA1, 0), # VK_RSHIFT
-            (0xA2, 0), # VK_LCONTROL
-            (0xA3, win32con.KEYEVENTF_EXTENDEDKEY), # VK_RCONTROL
-            (0xA4, 0), # VK_LMENU (Alt)
-            (0xA5, win32con.KEYEVENTF_EXTENDEDKEY), # VK_RMENU (RAlt)
-            (0x5B, win32con.KEYEVENTF_EXTENDEDKEY), # VK_LWIN
-            (0x5C, win32con.KEYEVENTF_EXTENDEDKEY)  # VK_RWIN
-        ]
-
-        # Unconditionally force release all modifiers (both specific and generic)
-        # This guarantees Chrome/Edge will not see leftover modifier states like Shift
-        # even if the user presses the hotkey extremely fast.
-        for vk, flags in modifiers + [(0x10, 0), (0x11, 0), (0x12, 0)]:
-            try:
-                sc = win32api.MapVirtualKey(vk, 0)
-                win32api.keybd_event(vk, sc, win32con.KEYEVENTF_KEYUP | flags, 0)
-            except Exception:
-                pass
-
-        # Small delay to let OS register modifier key releases
-        time.sleep(0.08)
-
-        # Simulate Ctrl+C using Win32 API with proper scan codes
-        VK_C = 0x43
-        VK_CONTROL = 0x11
-        SC_C = win32api.MapVirtualKey(VK_C, 0)
-        SC_CONTROL = win32api.MapVirtualKey(VK_CONTROL, 0)
-
-        win32api.keybd_event(VK_CONTROL, SC_CONTROL, 0, 0)  # Ctrl down
-        win32api.keybd_event(VK_C, SC_C, 0, 0)  # C down
-        win32api.keybd_event(VK_C, SC_C, win32con.KEYEVENTF_KEYUP, 0)  # C up
-        win32api.keybd_event(VK_CONTROL, SC_CONTROL, win32con.KEYEVENTF_KEYUP, 0)  # Ctrl up
-        
-        # We intentionally do NOT restore modifiers here via software KEYDOWN.
-        # Restoring them was causing keys (like Ctrl) to get stuck down permanently 
-        # if the user physically released them right before our software restored them.
-
-        # Đợi clipboard cập nhật (tối đa 500ms, kiểm tra mỗi 50ms)
+        # Poll clipboard sequence number: if unchanged, nothing was selected
+        changed = False
         selected_text = ""
         selected_rtf = None
         clipboard_hints = {"excel": False}
-        for _ in range(10):
+
+        for _ in range(12):
             time.sleep(0.05)
+            if user32.GetClipboardSequenceNumber() != seq_before:
+                changed = True
+                break
+
+        if changed:
             current_dict = ClipboardUtil._read_clipboard()
             txt = current_dict.get(win32con.CF_UNICODETEXT, "")
-            # Need to normalize txt if it exists
-            if isinstance(txt, str) and txt != sentinel:
+            if isinstance(txt, str):
                 clipboard_hints = ClipboardUtil._extract_clipboard_hints(current_dict)
                 selected_text = ClipboardUtil._normalize_selected_plain_text(
                     txt, excel=clipboard_hints.get("excel", False)
                 )
                 selected_rtf = current_dict.get(CF_RTF)
-                break
 
-        # Khôi phục lại clipboard gốc
-        ClipboardUtil._write_clipboard(backup_dict)
+            if ClipboardUtil._is_suspect_stray_c_copy(selected_text):
+                logging.warning(
+                    "Suspect stray 'c' from synthetic copy; retrying copy (fg=%s).",
+                    fg_process,
+                )
+                seq_retry = user32.GetClipboardSequenceNumber()
+                time.sleep(0.06)
+                ClipboardUtil._copy_selection_to_clipboard()
+                for _ in range(12):
+                    time.sleep(0.05)
+                    if user32.GetClipboardSequenceNumber() != seq_retry:
+                        break
+                retry_dict = ClipboardUtil._read_clipboard()
+                retry_txt = retry_dict.get(win32con.CF_UNICODETEXT, "")
+                if isinstance(retry_txt, str) and not ClipboardUtil._is_suspect_stray_c_copy(retry_txt):
+                    clipboard_hints = ClipboardUtil._extract_clipboard_hints(retry_dict)
+                    selected_text = ClipboardUtil._normalize_selected_plain_text(
+                        retry_txt, excel=clipboard_hints.get("excel", False)
+                    )
+                    selected_rtf = retry_dict.get(CF_RTF)
+                else:
+                    selected_text = ""
+                    selected_rtf = None
 
-        # Chuẩn hóa nếu không copy được gì (vẫn là sentinel)
-        if selected_text == sentinel:
-            selected_text = ""
-            selected_rtf = None
+            # Restore original clipboard only if a new copy occurred
+            ClipboardUtil._write_clipboard(backup_dict)
+
+        if selection_state is not None:
+            selection_state = dict(selection_state)
+            selection_state["fg_process"] = fg_process
+            selection_state["original_char_count"] = len(selected_text)
 
         logging.info(
-            "Clipboard read. Got text length: %s, RTF present: %s, excel_like: %s",
+            "Clipboard read. Got text length: %s, RTF present: %s, excel_like: %s, "
+            "selection_capture: %s, fg_process: %s",
             len(selected_text),
             bool(selected_rtf),
             clipboard_hints.get("excel"),
+            bool(selection_state and selection_state.get("em_selection")),
+            fg_process,
         )
-        return selected_text, selected_rtf, clipboard_hints
+        return selected_text, selected_rtf, clipboard_hints, selection_state
 
     @staticmethod
     def replace_selected_text(
@@ -346,10 +456,23 @@ class ClipboardUtil:
         original_text: str | None = None,
         target_hwnd: int | None = None,
         clipboard_hints: dict | None = None,
+        selection_state: dict | None = None,
     ):
         """
         Replace the selected text with translated text, preserving formatting.
         """
+        from input_util import release_modifier_keys, send_ctrl_v_keybd
+        from selection_util import (
+            focus_window_for_paste,
+            hwnd_log,
+            prepare_text_selection_for_paste,
+        )
+
+        if original_text:
+            translated_text = ClipboardUtil.align_translated_line_structure(
+                original_text, translated_text
+            )
+
         # Backup current clipboard
         backup_dict = ClipboardUtil._read_clipboard()
 
@@ -379,53 +502,48 @@ class ClipboardUtil:
         write_dict[win32con.CF_UNICODETEXT] = formatted_text
         ClipboardUtil._write_clipboard(write_dict)
 
-        # We only need the modifiers list to force-release them below.
-        # Lazy import to avoid PyInstaller bundle issues (removed local imports to fix UnboundLocalError)
-        modifiers = [
-            (0xA0, 0), # VK_LSHIFT
-            (0xA1, 0), # VK_RSHIFT
-            (0xA2, 0), # VK_LCONTROL
-            (0xA3, win32con.KEYEVENTF_EXTENDEDKEY), # VK_RCONTROL
-            (0xA4, 0), # VK_LMENU (Alt)
-            (0xA5, win32con.KEYEVENTF_EXTENDEDKEY), # VK_RMENU (RAlt)
-            (0x5B, win32con.KEYEVENTF_EXTENDEDKEY), # VK_LWIN
-            (0x5C, win32con.KEYEVENTF_EXTENDEDKEY)  # VK_RWIN
-        ]
+        release_modifier_keys()
+        time.sleep(0.05)
 
-        # Unconditionally force release all modifiers (both specific and generic)
-        for vk, flags in modifiers + [(0x10, 0), (0x11, 0), (0x12, 0)]:
-            try:
-                sc = win32api.MapVirtualKey(vk, 0)
-                win32api.keybd_event(vk, sc, win32con.KEYEVENTF_KEYUP | flags, 0)
-            except Exception:
-                pass
-
+        preferred_focus = (
+            selection_state.get("focus_hwnd") if selection_state else None
+        )
+        fg_process = (selection_state or {}).get("fg_process")
+        paste_focus = focus_window_for_paste(
+            target_hwnd, preferred_focus, fg_process=fg_process
+        )
+        select_method = prepare_text_selection_for_paste(
+            selection_state, original_text
+        )
+        logging.info(
+            "Replace focus hwnd=%s paste_focus=%s select_method=%s",
+            hwnd_log(target_hwnd),
+            hwnd_log(paste_focus),
+            select_method,
+        )
         time.sleep(0.08)
 
-        ClipboardUtil._focus_window(target_hwnd)
-
-        # Simulate Ctrl+V using Win32 API with proper scan codes
-        VK_V = 0x56
-        VK_CONTROL = 0x11
-        SC_V = win32api.MapVirtualKey(VK_V, 0)
-        SC_CONTROL = win32api.MapVirtualKey(VK_CONTROL, 0)
-
-        win32api.keybd_event(VK_CONTROL, SC_CONTROL, 0, 0)  # Ctrl down
-        win32api.keybd_event(VK_V, SC_V, 0, 0)  # V down
-        win32api.keybd_event(VK_V, SC_V, win32con.KEYEVENTF_KEYUP, 0)  # V up
-        win32api.keybd_event(VK_CONTROL, SC_CONTROL, win32con.KEYEVENTF_KEYUP, 0)  # Ctrl up
-        
-        # We intentionally do NOT restore modifiers here via software KEYDOWN.
-        # Let the target app finish pasting before we restore the old clipboard.
+        send_ctrl_v_keybd()
         time.sleep(CLIPBOARD_PASTE_SETTLE_DELAY)
 
         # Restore clipboard after paste
         ClipboardUtil._write_clipboard(backup_dict)
         logging.info(f"Clipboard replaced and restored (target lang: {target_lang}).")
 
+    _SAFE_FORMATS = (win32con.CF_UNICODETEXT, win32con.CF_TEXT, win32con.CF_OEMTEXT)
+
+    @staticmethod
+    def _is_safe_clipboard_format(fmt: int, data: any) -> bool:
+        """Strict whitelist: only standard plain text and RTF bytes. Reject all OLE, COM handles, or custom formats."""
+        if not isinstance(data, (str, bytes)):
+            return False
+        if fmt in ClipboardUtil._SAFE_FORMATS or fmt == CF_RTF:
+            return True
+        return False
+
     @staticmethod
     def _read_clipboard() -> dict:
-        """Read all clipboard formats into a dictionary."""
+        """Read safe clipboard formats (text/RTF/bytes) into a dictionary."""
         data_dict = {}
         opened = False
         # Retry up to 5 times (total 50ms) to open clipboard if locked
@@ -448,7 +566,8 @@ class ClipboardUtil:
                     break
                 try:
                     data = win32clipboard.GetClipboardData(fmt)
-                    data_dict[fmt] = data
+                    if ClipboardUtil._is_safe_clipboard_format(fmt, data):
+                        data_dict[fmt] = data
                 except Exception:
                     pass
         except Exception as e:
@@ -464,7 +583,7 @@ class ClipboardUtil:
 
     @staticmethod
     def _write_clipboard(data_dict: dict):
-        """Write a dictionary of clipboard formats and data."""
+        """Write safe clipboard formats and data without crashing heap."""
         opened = False
         # Retry up to 5 times (total 50ms) to open clipboard if locked
         for i in range(5):
@@ -481,6 +600,8 @@ class ClipboardUtil:
         try:
             win32clipboard.EmptyClipboard()
             for fmt, data in data_dict.items():
+                if not isinstance(data, (str, bytes)):
+                    continue
                 try:
                     win32clipboard.SetClipboardData(fmt, data)
                 except Exception:
@@ -620,6 +741,11 @@ class RTFManipulator:
 
         from font_mapper import FontMapper
         new_font = FontMapper.get_font(target_lang)
+
+        if original_text:
+            new_text = ClipboardUtil.align_translated_line_structure(
+                original_text, new_text
+            )
 
         try:
             result = RTFManipulator._do_rtf_replace(

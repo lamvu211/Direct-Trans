@@ -8,6 +8,7 @@ a = Analysis(
     datas=[('src\\assets', 'assets')],
     hiddenimports=[
         'pystray._win32', 'win32clipboard', 'win32con', 'win32api',
+        'selection_util', 'input_util',
         'PySide6.QtCore', 'PySide6.QtGui', 'PySide6.QtWidgets',
     ],
     hookspath=[],
@@ -25,7 +26,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='DirectTrans_v2.0.6',
+    name='DirectTrans_v2.0.10',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
