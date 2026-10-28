@@ -8,7 +8,7 @@ import sys
 import threading
 import time
 
-from PySide6.QtCore import Qt, QTimer, QPoint
+from PySide6.QtCore import QEvent, Qt, QTimer, QPoint
 from PySide6.QtGui import QCursor, QFont, QGuiApplication, QIcon, QColor, QIntValidator, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QComboBox,
@@ -38,15 +38,22 @@ POPUP_FONT_SIZE_MAX = 36
 
 
 class _ThemedPopupWidget(QWidget):
-    """Top-level popup widget with Esc key dismiss."""
+    """Top-level popup widget with Esc key dismiss (after user clicks into the popup)."""
 
     def __init__(self, owner, parent=None, flags=Qt.WindowType.Widget):
         super().__init__(parent, flags)
         self.owner = owner
 
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonPress:
+            focus_target = obj if isinstance(obj, QWidget) else None
+            self.owner.engage_popup_focus(focus_target)
+        return False
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_Escape:
-            self.owner.close()
+            if self.owner.is_popup_focus_engaged():
+                self.owner.close()
             event.accept()
             return
         super().keyPressEvent(event)
@@ -54,6 +61,15 @@ class _ThemedPopupWidget(QWidget):
     def closeEvent(self, event):
         self.owner.close()
         event.accept()
+
+
+def _install_popup_click_focus(root: QWidget) -> None:
+    """Any click on the popup engages keyboard focus without stealing it on initial show."""
+    if not isinstance(root, _ThemedPopupWidget):
+        return
+    root.installEventFilter(root)
+    for child in root.findChildren(QWidget):
+        child.installEventFilter(root)
 
 
 def _make_swatch_icon(color_hex: str, size: int = 14) -> QIcon:
@@ -168,6 +184,7 @@ class QtPopupWindow:
         self.selection_state = None
         self._copy_reset_timer: QTimer | None = None
         self._state = STATE_READY
+        self._popup_focus_engaged = False
 
     def _ui_lang(self) -> str:
         return self.config.data.get("ui_language", "vi") if self.config else "vi"
@@ -195,6 +212,7 @@ class QtPopupWindow:
         selection_state: dict | None = None,
     ):
         self._ensure_app()
+        self._popup_focus_engaged = False
         self.original_rtf = original_rtf
         self.original_text = original_text
         self.clipboard_hints = clipboard_hints
@@ -216,10 +234,9 @@ class QtPopupWindow:
         win = _ThemedPopupWidget(
             self,
             None,
-            Qt.WindowType.Window
-            | Qt.WindowType.WindowStaysOnTopHint
-            | Qt.WindowType.WindowDoesNotAcceptFocus,
+            Qt.WindowType.Window | Qt.WindowType.WindowStaysOnTopHint,
         )
+        win.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, True)
         win.setObjectName("popupRoot")
         win.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         theme_id = self.config.get_ui_theme() if self.config else "midnight_gold"
@@ -355,14 +372,6 @@ class QtPopupWindow:
         self.copy_btn.clicked.connect(self._copy)
         actions.addWidget(self.copy_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        self.close_btn = QPushButton("✕")
-        self.close_btn.setObjectName("sizeBtn")
-        self.close_btn.setFixedSize(24, 24)
-        self.close_btn.setToolTip("Close")
-        self.close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.close_btn.clicked.connect(self.close)
-        actions.addWidget(self.close_btn, 0, Qt.AlignmentFlag.AlignVCenter)
-
         header.addLayout(actions)
         main.addWidget(header_container)
 
@@ -402,11 +411,35 @@ class QtPopupWindow:
         self._refresh_status_label(t)
         self._sync_action_buttons()
         self.window = win
+        _install_popup_click_focus(win)
         QtPopupWindow.open_popups.append(self)
         win.show()
         self._center_on_work_area(win)
         QTimer.singleShot(0, lambda w=win: self._center_on_work_area(w))
         win.raise_()
+
+    def is_popup_focus_engaged(self) -> bool:
+        return self._popup_focus_engaged
+
+    def engage_popup_focus(self, focus_widget: QWidget | None = None) -> None:
+        """
+        After the user clicks the popup, accept keyboard focus (font size, Esc).
+        Initial show uses WA_ShowWithoutActivating so the source app keeps selection.
+        """
+        win = self.window
+        if not win:
+            return
+        if not self._popup_focus_engaged:
+            self._popup_focus_engaged = True
+            win.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating, False)
+            win.activateWindow()
+        win.raise_()
+        if (
+            focus_widget is not None
+            and focus_widget.focusPolicy() != Qt.FocusPolicy.NoFocus
+            and not focus_widget.hasFocus()
+        ):
+            focus_widget.setFocus(Qt.FocusReason.MouseFocusReason)
 
     @staticmethod
     def _clamp_font_size(size: int) -> int:

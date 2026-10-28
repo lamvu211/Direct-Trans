@@ -156,13 +156,17 @@ class TestUiQaFixes(unittest.TestCase):
         popup.close()
 
     def test_issue_08_popup_esc_key_and_stay_on_top(self):
-        """ISSUE-08: Popup dismisses on Esc key and has StayOnTop flag."""
+        """ISSUE-08: Esc closes popup only after user clicked into it; StayOnTop flag set."""
         popup = QtPopupWindow(config=self.config)
         popup.show(translated_text="Text", target_lang="VI", target_lang_code="vi")
         self.assertTrue(bool(popup.window.windowFlags() & Qt.WindowType.WindowStaysOnTopHint))
+        self.assertFalse(popup.is_popup_focus_engaged())
 
-        # Simulate Escape key event
         key_event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_Escape, Qt.KeyboardModifier.NoModifier)
+        self.app.sendEvent(popup.window, key_event)
+        self.assertIsNotNone(popup.window)
+
+        popup.engage_popup_focus()
         self.app.sendEvent(popup.window, key_event)
         self.assertIsNone(popup.window)
 

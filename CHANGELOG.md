@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.0.12
+- **Popup UX**: Remove redundant toolbar close (✕) button; title-bar close unchanged. Popup no longer steals focus on show (preserves v2.0.10 copy/replace behavior). After the user clicks anywhere on the popup, keyboard focus moves to the popup so font size can be typed (9–36) and **Esc** closes the window.
+- **Build**: `APP_VERSION` **2.0.12**; artifact **`DirectTrans_v2.0.12.exe`**.
+
 ## v2.0.11
 - **Replace / Excel (regression fix)**: Detect Excel/BIFF clipboard formats by **registered format name** while enumerating the clipboard, without loading unsafe OLE handles into memory. Restores `excel_like` detection with the v2.0.10 safe clipboard whitelist so quoted TSV, `EXCEL_LAYOUT_ADDON`, and `coerce_excel_paste_text` run again on Excel copy/replace.
 - **Build**: `APP_VERSION` **2.0.11**; artifact **`DirectTrans_v2.0.11.exe`**.
