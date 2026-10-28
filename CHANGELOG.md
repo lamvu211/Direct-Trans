@@ -1,8 +1,16 @@
 # Changelog
 
+## v2.0.11
+- **Replace / Excel (regression fix)**: Detect Excel/BIFF clipboard formats by **registered format name** while enumerating the clipboard, without loading unsafe OLE handles into memory. Restores `excel_like` detection with the v2.0.10 safe clipboard whitelist so quoted TSV, `EXCEL_LAYOUT_ADDON`, and `coerce_excel_paste_text` run again on Excel copy/replace.
+- **Build**: `APP_VERSION` **2.0.11**; artifact **`DirectTrans_v2.0.11.exe`**.
+
 ## v2.0.10
-- **WeChat**: Do not treat WeChat inputs as EM Edit (fake `EM_GETSEL`); skip `AttachThreadInput` on focus; re-select source with **Shift+Left** before Replace paste; WeChat-only single-step Ctrl+C copy.
-- **Stability**: Safer `AttachThreadInput` detach on errors (reduces sudden exit on WeChat focus).
+- **Copy**: Try `WM_COPY` on the focused control first (keeps selection in Edit/RichEdit without keystrokes); wait for hotkey modifiers to release before synthetic Ctrl+C; clipboard sequence number instead of a sentinel string; reject stray lone `c` from CEF copy and retry once.
+- **WeChat / CEF**: Do not treat WeChat as EM Edit (`EM_GETSEL`/`EM_SETSEL`); skip `AttachThreadInput` when focusing WeChat for paste; WeChat uses `keybd_event` Ctrl+C after releasing modifiers (SendInput path for other apps).
+- **Selection / Replace**: `selection_util` captures EM selection on real Edit/RichEdit only; otherwise stores focus hwnd (`capture_focus_hint`); re-select before paste via `EM_SETSEL` when supported — CEF apps keep selection without keyboard nudges.
+- **Clipboard safety**: Read/write only whitelisted plain text and RTF bytes (avoids heap crashes from foreign OLE/COM clipboard payloads, e.g. WeChat).
+- **Stability**: Safer `AttachThreadInput` detach; hotkey debounce; normalized HWND logging mask.
+- **Build**: `APP_VERSION` **2.0.10**; artifact **`DirectTrans_v2.0.10.exe`**.
 
 ## v2.0.9
 - **Copy (regression fix)**: Restore modifier release before `keybd_event` Ctrl+C; add SendInput attempt first for CEF. Removed incorrect WeChat “reuse old clipboard” fallback (translated stale clipboard text).

@@ -1,26 +1,31 @@
 @echo off
+setlocal EnableExtensions
+
 echo === DirectTrans Build ===
 echo.
 
-REM Stop running DirectTrans instances so dist\*.exe is not locked (WinError 5)
-echo Stopping any running DirectTrans processes...
-taskkill /F /IM DirectTrans_v2.0.6.exe >nul 2>&1
-taskkill /F /IM DirectTrans_v2.0.5.exe >nul 2>&1
-taskkill /F /IM DirectTrans_v2.0.4.exe >nul 2>&1
-taskkill /F /IM DirectTrans_v2.0.3.exe >nul 2>&1
-taskkill /F /IM DirectTrans_v2.0.2.exe >nul 2>&1
-taskkill /F /IM DirectTrans_v2.0.1.exe >nul 2>&1
-taskkill /F /IM DirectTrans.exe >nul 2>&1
-powershell -NoProfile -Command "Get-Process -Name 'DirectTrans*' -ErrorAction SilentlyContinue | Stop-Process -Force" >nul 2>&1
-ping -n 3 127.0.0.1 >nul
+for /f "delims=" %%V in ('python -c "import sys; sys.path.insert(0,'src'); from constants import APP_VERSION; print(APP_VERSION)"') do set "APP_VERSION=%%V"
+if not defined APP_VERSION (
+  echo ERROR: Could not read APP_VERSION from src\constants.py
+  exit /b 1
+)
+set "EXE_NAME=DirectTrans_v%APP_VERSION%.exe"
 
-REM Install dependencies
+REM Unlock dist\*.exe if a running instance holds the file (WinError 5)
+echo Stopping DirectTrans processes...
+powershell -NoProfile -Command "Get-Process -Name 'DirectTrans*' -ErrorAction SilentlyContinue | Stop-Process -Force" >nul 2>&1
+timeout /t 2 /nobreak >nul
+
 pip install -r requirements.txt
 pip install pyinstaller
 
-REM Build exe using spec file (single source of truth for build config)
-echo Building DirectTrans v2.0.6...
+echo Building DirectTrans v%APP_VERSION%...
 python -m PyInstaller --clean --noconfirm DirectTrans.spec
+if errorlevel 1 (
+  echo Build failed.
+  exit /b 1
+)
 
 echo.
-echo Build done! File: dist\DirectTrans_v2.0.6.exe
+echo Build done! File: dist\%EXE_NAME%
+endlocal

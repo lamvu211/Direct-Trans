@@ -71,6 +71,11 @@ class TestUnicodePasteHeuristics(unittest.TestCase):
             )
         )
 
+    def test_excel_format_name_detection(self):
+        self.assertTrue(ClipboardUtil._format_name_indicates_excel("Biff8"))
+        self.assertTrue(ClipboardUtil._format_name_indicates_excel("Excel Sheet"))
+        self.assertFalse(ClipboardUtil._format_name_indicates_excel("Rich Text Format"))
+
     def test_excel_parse_quoted_multiline_cell(self):
         raw = '"line1\nline2"\r\nsecond'
         grid = ClipboardUtil.parse_excel_clipboard(raw)

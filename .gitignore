@@ -14,6 +14,15 @@ __pycache__/
 directtrans.log.*
 directtrans.signal
 boot_trace.txt
+.env
+.env.*
+
+# Windows junk
+Thumbs.db
+Desktop.ini
+
+# Local archives (build output stays under dist/)
+*.rar
 
 # Debug / scratch at repo root
 scratch/

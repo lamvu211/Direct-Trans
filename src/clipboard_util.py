@@ -93,10 +93,9 @@ class ClipboardUtil:
         clipboard_hints = {"excel": False}
         for _ in range(12):
             time.sleep(0.05)
-            current_dict = ClipboardUtil._read_clipboard()
+            current_dict, clipboard_hints = ClipboardUtil._read_clipboard()
             txt = current_dict.get(win32con.CF_UNICODETEXT, "")
             if isinstance(txt, str) and txt != sentinel:
-                clipboard_hints = ClipboardUtil._extract_clipboard_hints(current_dict)
                 selected_text = ClipboardUtil._normalize_selected_plain_text(
                     txt, excel=clipboard_hints.get("excel", False)
                 )
@@ -105,18 +104,26 @@ class ClipboardUtil:
         return selected_text, clipboard_hints, selected_rtf
 
     @staticmethod
+    def _format_name_indicates_excel(name: str) -> bool:
+        lower = name.lower()
+        return any(frag in lower for frag in _EXCEL_CLIPBOARD_NAME_FRAGMENTS)
+
+    @staticmethod
+    def _excel_hint_from_format_id(fmt: int) -> bool:
+        try:
+            name = win32clipboard.GetClipboardFormatName(fmt)
+        except Exception:
+            return False
+        if not name:
+            return False
+        return ClipboardUtil._format_name_indicates_excel(name)
+
+    @staticmethod
     def _extract_clipboard_hints(data_dict: dict) -> dict:
         """Detect source app traits from formats present after Ctrl+C."""
         excel = False
         for fmt in data_dict:
-            try:
-                name = win32clipboard.GetClipboardFormatName(fmt)
-            except Exception:
-                continue
-            if not name:
-                continue
-            lower = name.lower()
-            if any(frag in lower for frag in _EXCEL_CLIPBOARD_NAME_FRAGMENTS):
+            if ClipboardUtil._excel_hint_from_format_id(fmt):
                 excel = True
                 break
         return {"excel": excel}
@@ -379,7 +386,7 @@ class ClipboardUtil:
         seq_before = user32.GetClipboardSequenceNumber()
 
         # Backup current clipboard (safe formats only)
-        backup_dict = ClipboardUtil._read_clipboard()
+        backup_dict, _ = ClipboardUtil._read_clipboard()
 
         ClipboardUtil._copy_selection_to_clipboard()
 
@@ -396,10 +403,9 @@ class ClipboardUtil:
                 break
 
         if changed:
-            current_dict = ClipboardUtil._read_clipboard()
+            current_dict, clipboard_hints = ClipboardUtil._read_clipboard()
             txt = current_dict.get(win32con.CF_UNICODETEXT, "")
             if isinstance(txt, str):
-                clipboard_hints = ClipboardUtil._extract_clipboard_hints(current_dict)
                 selected_text = ClipboardUtil._normalize_selected_plain_text(
                     txt, excel=clipboard_hints.get("excel", False)
                 )
@@ -417,10 +423,9 @@ class ClipboardUtil:
                     time.sleep(0.05)
                     if user32.GetClipboardSequenceNumber() != seq_retry:
                         break
-                retry_dict = ClipboardUtil._read_clipboard()
+                retry_dict, clipboard_hints = ClipboardUtil._read_clipboard()
                 retry_txt = retry_dict.get(win32con.CF_UNICODETEXT, "")
                 if isinstance(retry_txt, str) and not ClipboardUtil._is_suspect_stray_c_copy(retry_txt):
-                    clipboard_hints = ClipboardUtil._extract_clipboard_hints(retry_dict)
                     selected_text = ClipboardUtil._normalize_selected_plain_text(
                         retry_txt, excel=clipboard_hints.get("excel", False)
                     )
@@ -474,7 +479,7 @@ class ClipboardUtil:
             )
 
         # Backup current clipboard
-        backup_dict = ClipboardUtil._read_clipboard()
+        backup_dict, _ = ClipboardUtil._read_clipboard()
 
         write_dict = {}
         use_unicode_only = ClipboardUtil.should_prefer_unicode_paste(
@@ -542,9 +547,10 @@ class ClipboardUtil:
         return False
 
     @staticmethod
-    def _read_clipboard() -> dict:
-        """Read safe clipboard formats (text/RTF/bytes) into a dictionary."""
+    def _read_clipboard() -> tuple[dict, dict]:
+        """Read safe clipboard payloads and detect Excel-like copies from format names."""
         data_dict = {}
+        excel = False
         opened = False
         # Retry up to 5 times (total 50ms) to open clipboard if locked
         for i in range(5):
@@ -555,7 +561,7 @@ class ClipboardUtil:
             except Exception as e:
                 if i == 4:
                     logging.warning(f"Clipboard read failed (may be locked by another app): {e}")
-                    return {}
+                    return {}, {"excel": False}
                 time.sleep(0.01)
         
         try:
@@ -564,6 +570,8 @@ class ClipboardUtil:
                 fmt = win32clipboard.EnumClipboardFormats(fmt)
                 if fmt == 0:
                     break
+                if ClipboardUtil._excel_hint_from_format_id(fmt):
+                    excel = True
                 try:
                     data = win32clipboard.GetClipboardData(fmt)
                     if ClipboardUtil._is_safe_clipboard_format(fmt, data):
@@ -579,7 +587,7 @@ class ClipboardUtil:
                 except Exception:
                     pass
             
-        return data_dict
+        return data_dict, {"excel": excel}
 
     @staticmethod
     def _write_clipboard(data_dict: dict):
