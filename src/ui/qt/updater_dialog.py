@@ -60,7 +60,7 @@ def show_update_dialog(config, latest_tag: str, _release_name: str = "") -> None
     dialog.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
     theme_id = config.get_ui_theme()
     apply_theme(dialog, theme_id)
-    dialog.setWindowTitle(s["title"])
+    dialog.setWindowTitle("DirectTrans Update")
     dialog.setModal(True)
     dialog.setMinimumWidth(360)
 
