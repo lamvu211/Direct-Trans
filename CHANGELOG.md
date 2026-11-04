@@ -2,6 +2,7 @@
 
 ## v2.0.12
 - **Popup UX**: Remove redundant toolbar close (✕) button; title-bar close unchanged. Popup no longer steals focus on show (preserves v2.0.10 copy/replace behavior). After the user clicks anywhere on the popup, keyboard focus moves to the popup so font size can be typed (9–36) and **Esc** closes the window.
+- **Update dialog**: Window title bar shows **DirectTrans Update** (localized message and buttons unchanged).
 - **Build**: `APP_VERSION` **2.0.12**; artifact **`DirectTrans_v2.0.12.exe`**.
 
 ## v2.0.11
