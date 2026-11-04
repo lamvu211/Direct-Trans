@@ -170,6 +170,125 @@ class TestUiQaFixes(unittest.TestCase):
         self.app.sendEvent(popup.window, key_event)
         self.assertIsNone(popup.window)
 
+    def test_popup_closes_when_foreground_leaves_source_app(self):
+        from unittest.mock import patch
+
+        import ui.qt.popup_window as popup_mod
+
+        popup = QtPopupWindow(config=self.config)
+        popup.show(
+            translated_text="Text",
+            target_lang="VI",
+            target_lang_code="vi",
+            original_hwnd=0x1000,
+        )
+        popup._source_root_hwnd = 0x1000
+        self.app.processEvents()
+        self.assertIsNotNone(popup.window)
+
+        with patch.object(popup_mod, "_root_hwnd") as root_mock:
+            root_mock.side_effect = lambda hwnd: {
+                0x1000: 0x1000,
+                0x1001: 0x1000,
+                0x2000: 0x2000,
+            }.get(popup_mod._hwnd_int(hwnd), popup_mod._hwnd_int(hwnd))
+            with patch.object(popup_mod, "_hwnd_process_id", return_value=999):
+                popup_mod._apply_foreground_to_popups(0x2000)
+        self.app.processEvents()
+        self.assertIsNotNone(popup.window)
+        self.assertFalse(popup.window.isVisible())
+        popup.close()
+
+    def test_popup_stays_while_foreground_on_source_root(self):
+        from unittest.mock import patch
+
+        import ui.qt.popup_window as popup_mod
+
+        popup = QtPopupWindow(config=self.config)
+        popup.show(
+            translated_text="Text",
+            target_lang="VI",
+            target_lang_code="vi",
+            original_hwnd=0x1000,
+        )
+        popup._source_root_hwnd = 0x1000
+        self.app.processEvents()
+        with patch.object(popup_mod, "_root_hwnd") as root_mock:
+            root_mock.side_effect = lambda hwnd: {
+                0x1000: 0x1000,
+                0x1001: 0x1000,
+            }.get(popup_mod._hwnd_int(hwnd), popup_mod._hwnd_int(hwnd))
+            with patch.object(popup_mod, "_hwnd_process_id", return_value=999):
+                popup_mod._apply_foreground_to_popups(0x1001)
+        self.app.processEvents()
+        self.assertIsNotNone(popup.window)
+        popup.close()
+
+    def test_popup_closes_on_click_outside(self):
+        import ui.qt.popup_window as popup_mod
+
+        popup = QtPopupWindow(config=self.config)
+        popup.show(
+            translated_text="Text",
+            target_lang="VI",
+            target_lang_code="vi",
+            original_hwnd=0x1000,
+        )
+        popup._outside_click_grace_until = 0.0
+        self.app.processEvents()
+        popup_mod._handle_outside_click(10, 10)
+        self.app.processEvents()
+        self.assertIsNotNone(popup.window)
+        self.assertFalse(popup.window.isVisible())
+        popup.close()
+
+    def test_popup_keeps_on_click_inside(self):
+        from unittest.mock import patch
+
+        import ui.qt.popup_window as popup_mod
+
+        popup = QtPopupWindow(config=self.config)
+        popup.show(
+            translated_text="Text",
+            target_lang="VI",
+            target_lang_code="vi",
+        )
+        popup._outside_click_grace_until = 0.0
+        self.app.processEvents()
+        with patch.object(popup_mod, "_screen_point_hits_popup_ui", return_value=True):
+            popup_mod._handle_outside_click(10, 10)
+        self.app.processEvents()
+        self.assertTrue(popup.window.isVisible())
+        popup.close()
+
+    def test_popup_hides_on_click_outside_by_geometry(self):
+        import ui.qt.popup_window as popup_mod
+
+        popup = QtPopupWindow(config=self.config)
+        popup.show(
+            translated_text="Text",
+            target_lang="VI",
+            target_lang_code="vi",
+        )
+        popup._outside_click_grace_until = 0.0
+        self.app.processEvents()
+        center = popup.window.frameGeometry().center()
+        popup_mod._handle_outside_click(center.x() + 5000, center.y() + 5000)
+        self.app.processEvents()
+        self.assertFalse(popup.window.isVisible())
+        popup.close()
+
+    def test_popup_window_size_persisted_in_config(self):
+        self.config.set_popup_window_size(880, 620)
+        got = self.config.get_popup_window_size()
+        self.assertEqual(got, {"width": 880, "height": 620})
+        popup = QtPopupWindow(config=self.config)
+        popup.show(translated_text="Text", target_lang="English", target_lang_code="en")
+        self.app.processEvents()
+        self.assertEqual(popup.window.width(), 880)
+        self.assertEqual(popup.window.height(), 620)
+        popup.close()
+
     def test_issue_09_api_key_row_actions(self):
         """API key row has clear action and get-key button."""
         win = QtSettingsWindow(self.config, None, None, None)

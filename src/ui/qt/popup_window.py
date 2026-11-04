@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ctypes
 import logging
 import os
 import sys
@@ -35,6 +36,329 @@ STATE_ERROR = "error"
 
 POPUP_FONT_SIZE_MIN = 9
 POPUP_FONT_SIZE_MAX = 36
+POPUP_WINDOW_MIN_WIDTH = 690
+POPUP_WINDOW_MIN_HEIGHT = 468
+POPUP_WINDOW_DEFAULT_WIDTH = 810
+POPUP_WINDOW_DEFAULT_HEIGHT = 546
+
+WM_ENTERSIZEMOVE = 0x0231
+WM_EXITSIZEMOVE = 0x0232
+HTNOWHERE = 0
+EVENT_SYSTEM_FOREGROUND = 0x0003
+WINEVENT_OUTOFCONTEXT = 0x0000
+WH_MOUSE_LL = 14
+WM_LBUTTONDOWN = 0x0201
+WM_RBUTTONDOWN = 0x0204
+WM_MBUTTONDOWN = 0x0207
+_OUTSIDE_CLICK_GRACE_SEC = 0.25
+
+_foreground_watch_timer: QTimer | None = None
+_win_event_hook_handle = None
+_win_event_proc_ref = None
+_mouse_hook_handle = None
+_mouse_hook_proc_ref = None
+_click_poll_timer: QTimer | None = None
+_left_button_was_down = False
+_OUR_PROCESS_ID = os.getpid()
+
+
+class _POINT(ctypes.Structure):
+    _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+
+class _MSLLHOOKSTRUCT(ctypes.Structure):
+    _fields_ = [
+        ("pt", _POINT),
+        ("mouseData", ctypes.c_ulong),
+        ("flags", ctypes.c_ulong),
+        ("time", ctypes.c_ulong),
+        ("dwExtraInfo", ctypes.c_size_t),
+    ]
+
+
+def _hwnd_int(hwnd) -> int:
+    if not hwnd:
+        return 0
+    try:
+        return int(hwnd)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _hwnd_process_id(hwnd: int | None) -> int | None:
+    if not hwnd:
+        return None
+    try:
+        import win32gui
+        import win32process
+
+        hwnd = _hwnd_int(hwnd)
+        if not hwnd or not win32gui.IsWindow(hwnd):
+            return None
+        _, pid = win32process.GetWindowThreadProcessId(hwnd)
+        return int(pid) if pid else None
+    except Exception:
+        return None
+
+
+def _root_hwnd(hwnd: int | None) -> int | None:
+    hwnd = _hwnd_int(hwnd)
+    if not hwnd:
+        return None
+    try:
+        import win32con
+        import win32gui
+
+        if not win32gui.IsWindow(hwnd):
+            return None
+        root = win32gui.GetAncestor(hwnd, win32con.GA_ROOT)
+        return _hwnd_int(root) if root else None
+    except Exception:
+        return None
+
+
+def _current_foreground_hwnd() -> int:
+    try:
+        import ctypes
+
+        return _hwnd_int(ctypes.windll.user32.GetForegroundWindow())
+    except Exception:
+        return 0
+
+
+def _any_popup_visible() -> bool:
+    return any(p.window is not None and p.window.isVisible() for p in QtPopupWindow.open_popups)
+
+
+def _any_popup_in_size_move() -> bool:
+    return any(getattr(p, "_in_size_move", False) for p in QtPopupWindow.open_popups)
+
+
+def _screen_lparam(screen_x: int, screen_y: int) -> int:
+    x = int(screen_x) & 0xFFFF
+    y = int(screen_y) & 0xFFFF
+    return x | (y << 16)
+
+
+def _popup_win32_hit_test(popup: "QtPopupWindow", screen_x: int, screen_y: int) -> int | None:
+    win = popup.window
+    if win is None or not win.isVisible():
+        return None
+    try:
+        import win32con
+        import win32gui
+
+        hwnd = int(win.winId())
+        return int(
+            win32gui.SendMessage(
+                hwnd,
+                win32con.WM_NCHITTEST,
+                0,
+                _screen_lparam(screen_x, screen_y),
+            )
+        )
+    except Exception:
+        return None
+
+
+def _screen_point_hits_popup_ui(screen_x: int, screen_y: int) -> bool:
+    """Hit-test in Qt screen coords; includes Win32 resize/caption bands."""
+    if _any_popup_in_size_move():
+        return True
+    pt = QPoint(int(screen_x), int(screen_y))
+    for popup in QtPopupWindow.open_popups:
+        win = popup.window
+        if win is not None and win.isVisible():
+            if win.frameGeometry().contains(pt):
+                return True
+            ht = _popup_win32_hit_test(popup, screen_x, screen_y)
+            if ht is not None and ht != HTNOWHERE:
+                return True
+        picker = getattr(popup, "_color_picker", None)
+        if picker is not None and picker.isVisible():
+            if picker.frameGeometry().contains(pt):
+                return True
+    return False
+
+
+def _apply_foreground_to_popups(fg_hwnd: int) -> None:
+    if not fg_hwnd or not QtPopupWindow.open_popups or not _any_popup_visible():
+        return
+    for popup in list(QtPopupWindow.open_popups):
+        if popup.window is None or not popup.window.isVisible():
+            continue
+        if popup._should_keep_visible_for_foreground(fg_hwnd):
+            continue
+        logging.info(
+            "Hiding translation popup: foreground left source window (fg=%#x)",
+            fg_hwnd,
+        )
+        popup.dismiss()
+
+
+def _check_popup_foreground() -> None:
+    if not QtPopupWindow.open_popups:
+        _stop_foreground_watch()
+        return
+    if not _any_popup_visible():
+        return
+    _apply_foreground_to_popups(_current_foreground_hwnd())
+
+
+def _handle_outside_click(screen_x: int, screen_y: int) -> None:
+    if not _any_popup_visible():
+        return
+    if _any_popup_in_size_move():
+        return
+    now = time.monotonic()
+    if _screen_point_hits_popup_ui(screen_x, screen_y):
+        return
+    for popup in list(QtPopupWindow.open_popups):
+        if popup.window is None or not popup.window.isVisible():
+            continue
+        if now < getattr(popup, "_outside_click_grace_until", 0.0):
+            continue
+        logging.info("Hiding translation popup: click outside")
+        popup.dismiss()
+        return
+
+
+def _poll_mouse_for_outside_click() -> None:
+    global _left_button_was_down
+    if not _any_popup_visible():
+        _left_button_was_down = False
+        return
+    down = bool(ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000)
+    if down and not _left_button_was_down:
+        pos = QCursor.pos()
+        _handle_outside_click(pos.x(), pos.y())
+    _left_button_was_down = down
+
+
+def _mouse_hook_callback(nCode, wParam, lParam):
+    try:
+        if nCode >= 0 and wParam in (WM_LBUTTONDOWN, WM_RBUTTONDOWN, WM_MBUTTONDOWN):
+            info = ctypes.cast(lParam, ctypes.POINTER(_MSLLHOOKSTRUCT)).contents
+            x, y = info.pt.x, info.pt.y
+            run_on_main(lambda: _handle_outside_click(x, y))
+    except Exception:
+        logging.exception("Low-level mouse hook failed")
+    try:
+        import ctypes as _ctypes
+
+        return _ctypes.windll.user32.CallNextHookEx(_mouse_hook_handle, nCode, wParam, lParam)
+    except Exception:
+        return 0
+
+
+def _ensure_mouse_hook() -> None:
+    global _mouse_hook_handle, _mouse_hook_proc_ref
+    if _mouse_hook_handle:
+        return
+    try:
+        from ctypes import wintypes
+
+        LowLevelMouseProc = ctypes.WINFUNCTYPE(
+            ctypes.c_long,
+            ctypes.c_int,
+            wintypes.WPARAM,
+            wintypes.LPARAM,
+        )
+        _mouse_hook_proc_ref = LowLevelMouseProc(_mouse_hook_callback)
+        _mouse_hook_handle = ctypes.windll.user32.SetWindowsHookExW(
+            WH_MOUSE_LL,
+            _mouse_hook_proc_ref,
+            None,
+            0,
+        )
+        if not _mouse_hook_handle:
+            logging.warning("SetWindowsHookExW(WH_MOUSE_LL) failed")
+    except Exception:
+        logging.exception("Failed to install outside-click mouse hook")
+
+
+def _win_event_callback(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime):
+    try:
+        fg = _hwnd_int(hwnd)
+        if fg:
+            run_on_main(lambda h=fg: _apply_foreground_to_popups(h))
+    except Exception:
+        logging.exception("WinEvent foreground callback failed")
+
+
+def _ensure_win_event_hook() -> None:
+    global _win_event_hook_handle, _win_event_proc_ref
+    if _win_event_hook_handle:
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        WinEventProc = ctypes.WINFUNCTYPE(
+            None,
+            wintypes.HANDLE,
+            wintypes.DWORD,
+            wintypes.HWND,
+            wintypes.LONG,
+            wintypes.LONG,
+            wintypes.DWORD,
+            wintypes.DWORD,
+        )
+        _win_event_proc_ref = WinEventProc(_win_event_callback)
+        _win_event_hook_handle = ctypes.windll.user32.SetWinEventHook(
+            EVENT_SYSTEM_FOREGROUND,
+            EVENT_SYSTEM_FOREGROUND,
+            None,
+            _win_event_proc_ref,
+            0,
+            0,
+            WINEVENT_OUTOFCONTEXT,
+        )
+        if not _win_event_hook_handle:
+            logging.warning("SetWinEventHook(EVENT_SYSTEM_FOREGROUND) failed; timer fallback only")
+    except Exception:
+        logging.exception("Failed to install foreground WinEvent hook")
+
+
+def _start_foreground_watch() -> None:
+    global _foreground_watch_timer, _click_poll_timer
+    _ensure_win_event_hook()
+    _ensure_mouse_hook()
+    app = QApplication.instance()
+    if app is None:
+        return
+    if _foreground_watch_timer is None:
+        _foreground_watch_timer = QTimer(app)
+        _foreground_watch_timer.setInterval(400)
+        _foreground_watch_timer.timeout.connect(_check_popup_foreground)
+    _foreground_watch_timer.start()
+    if _click_poll_timer is None:
+        _click_poll_timer = QTimer(app)
+        _click_poll_timer.setInterval(50)
+        _click_poll_timer.timeout.connect(_poll_mouse_for_outside_click)
+    _click_poll_timer.start()
+
+
+def _stop_foreground_watch() -> None:
+    global _foreground_watch_timer, _win_event_hook_handle, _mouse_hook_handle, _click_poll_timer
+    if _foreground_watch_timer is not None:
+        _foreground_watch_timer.stop()
+        _foreground_watch_timer = None
+    if _click_poll_timer is not None:
+        _click_poll_timer.stop()
+        _click_poll_timer = None
+    if _win_event_hook_handle:
+        try:
+            ctypes.windll.user32.UnhookWinEvent(_win_event_hook_handle)
+        except Exception:
+            logging.exception("UnhookWinEvent failed")
+        _win_event_hook_handle = None
+    if _mouse_hook_handle:
+        try:
+            ctypes.windll.user32.UnhookWindowsHookEx(_mouse_hook_handle)
+        except Exception:
+            logging.exception("UnhookWindowsHookEx failed")
+        _mouse_hook_handle = None
 
 
 class _ThemedPopupWidget(QWidget):
@@ -61,6 +385,21 @@ class _ThemedPopupWidget(QWidget):
     def closeEvent(self, event):
         self.owner.close()
         event.accept()
+
+    def nativeEvent(self, eventType, message):
+        if eventType in (b"windows_generic_MSG", "windows_generic_MSG"):
+            try:
+                import ctypes.wintypes
+
+                msg = ctypes.wintypes.MSG.from_address(int(message))
+                if msg.message == WM_ENTERSIZEMOVE:
+                    self.owner._in_size_move = True
+                elif msg.message == WM_EXITSIZEMOVE:
+                    self.owner._in_size_move = False
+                    self.owner._save_popup_window_size()
+            except Exception:
+                logging.debug("nativeEvent size-move handling failed", exc_info=True)
+        return super().nativeEvent(eventType, message)
 
 
 def _install_popup_click_focus(root: QWidget) -> None:
@@ -185,6 +524,9 @@ class QtPopupWindow:
         self._copy_reset_timer: QTimer | None = None
         self._state = STATE_READY
         self._popup_focus_engaged = False
+        self._source_root_hwnd: int | None = None
+        self._outside_click_grace_until = 0.0
+        self._in_size_move = False
 
     def _ui_lang(self) -> str:
         return self.config.data.get("ui_language", "vi") if self.config else "vi"
@@ -213,6 +555,7 @@ class QtPopupWindow:
     ):
         self._ensure_app()
         self._popup_focus_engaged = False
+        self._outside_click_grace_until = time.monotonic() + _OUTSIDE_CLICK_GRACE_SEC
         self.original_rtf = original_rtf
         self.original_text = original_text
         self.clipboard_hints = clipboard_hints
@@ -221,6 +564,7 @@ class QtPopupWindow:
         self.translated_text = translated_text
         self.provider_key = provider_key
         self.original_hwnd = original_hwnd
+        self._source_root_hwnd = _root_hwnd(original_hwnd) if original_hwnd else None
 
         for p in list(QtPopupWindow.open_popups):
             p.close()
@@ -245,9 +589,9 @@ class QtPopupWindow:
         target_lang_display = self._localized_target_name(ui_lang, target_lang, target_lang_code)
         title = f"{t['title_prefix']} → {target_lang_display}" if target_lang_display else "DirectTrans"
         win.setWindowTitle(title)
-        win.setMinimumSize(690, 468)
+        win.setMinimumSize(POPUP_WINDOW_MIN_WIDTH, POPUP_WINDOW_MIN_HEIGHT)
 
-        self._place_on_monitor(win)
+        self._apply_popup_window_size(win)
 
         icon_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "assets", "icon.ico"
@@ -417,6 +761,7 @@ class QtPopupWindow:
         self._center_on_work_area(win)
         QTimer.singleShot(0, lambda w=win: self._center_on_work_area(w))
         win.raise_()
+        _start_foreground_watch()
 
     def is_popup_focus_engaged(self) -> bool:
         return self._popup_focus_engaged
@@ -556,15 +901,32 @@ class QtPopupWindow:
         popup_h = min(740, max(507, int(avail_h * 0.50)))
         return popup_w, popup_h
 
-    def _place_on_monitor(self, win: QWidget):
-        """Size popup from Qt work area (DIPs) — matches setGeometry/move under DPI scaling."""
+    def _apply_popup_window_size(self, win: QWidget) -> None:
+        """Use saved config size or default for this monitor."""
+        saved = self.config.get_popup_window_size() if self.config else None
+        if saved:
+            win.resize(int(saved["width"]), int(saved["height"]))
+            return
         screen = self._screen_at_cursor()
         if screen is None:
-            win.resize(810, 546)
+            win.resize(POPUP_WINDOW_DEFAULT_WIDTH, POPUP_WINDOW_DEFAULT_HEIGHT)
             return
         avail = screen.availableGeometry()
         popup_w, popup_h = self._popup_dimensions(avail.width(), avail.height())
         win.resize(popup_w, popup_h)
+
+    def _save_popup_window_size(self) -> None:
+        if not self.config or not self.window:
+            return
+        fg = self.window.frameGeometry()
+        w, h = fg.width(), fg.height()
+        if w < POPUP_WINDOW_MIN_WIDTH or h < POPUP_WINDOW_MIN_HEIGHT:
+            w, h = self.window.width(), self.window.height()
+        self.config.set_popup_window_size(w, h)
+
+    def _place_on_monitor(self, win: QWidget):
+        """Legacy hook; sizing handled in _apply_popup_window_size."""
+        self._apply_popup_window_size(win)
 
     def _center_on_work_area(self, win: QWidget):
         """Center after show() so frameGeometry includes decorations and layout is applied."""
@@ -580,6 +942,45 @@ class QtPopupWindow:
 
     def _is_alive(self) -> bool:
         return self.window is not None and self.window.isVisible()
+
+    def _popup_ui_hwnds(self) -> list[int]:
+        hwnds: list[int] = []
+        if self.window is not None and self.window.isVisible():
+            try:
+                hwnds.append(_hwnd_int(self.window.winId()))
+            except Exception:
+                pass
+        picker = getattr(self, "_color_picker", None)
+        if picker is not None and picker.isVisible():
+            try:
+                hwnds.append(_hwnd_int(picker.winId()))
+            except Exception:
+                pass
+        return hwnds
+
+    def _should_keep_visible_for_foreground(self, fg_hwnd: int) -> bool:
+        """Keep popup while user stays in DirectTrans or the same top-level source window."""
+        fg_hwnd = _hwnd_int(fg_hwnd)
+        if not fg_hwnd:
+            return False
+        fg_pid = _hwnd_process_id(fg_hwnd)
+        if fg_pid is None:
+            return False
+        if fg_pid == _OUR_PROCESS_ID:
+            return True
+
+        source_root = self._source_root_hwnd
+        if not source_root and self.original_hwnd:
+            source_root = _root_hwnd(int(self.original_hwnd))
+            self._source_root_hwnd = source_root
+        if not source_root:
+            return True
+
+        orig = _hwnd_int(self.original_hwnd)
+        if fg_hwnd == orig or fg_hwnd == source_root:
+            return True
+        fg_root = _root_hwnd(fg_hwnd)
+        return bool(fg_root and fg_root == source_root)
 
     def _refresh_status_label(self, t=None):
         if not self.status_label:
@@ -671,7 +1072,7 @@ class QtPopupWindow:
 
                 def restore_and_error():
                     if self.window:
-                        self.window.show()
+                        self.restore_visible()
                     self.show_error(f"{t['replace_error']} {e}")
 
                 run_on_main(restore_and_error)
@@ -679,6 +1080,22 @@ class QtPopupWindow:
             run_on_main(self.close)
 
         threading.Thread(target=perform_paste, daemon=True).start()
+
+    def dismiss(self) -> None:
+        """Hide popup when user clicks away or switches apps; next hotkey creates a new popup."""
+        if getattr(self, "_color_picker", None):
+            try:
+                self._color_picker.close()
+            except Exception:
+                pass
+            self._color_picker = None
+        if self.window is not None:
+            try:
+                self.window.hide()
+            except Exception:
+                pass
+        if not _any_popup_visible():
+            _stop_foreground_watch()
 
     def close(self):
         if self in QtPopupWindow.open_popups:
@@ -690,3 +1107,12 @@ class QtPopupWindow:
             except Exception:
                 pass
             self.window = None
+        if not QtPopupWindow.open_popups:
+            _stop_foreground_watch()
+
+    def restore_visible(self) -> None:
+        """Show hidden popup again (e.g. after failed Replace)."""
+        if self.window is not None:
+            self.window.show()
+            self.window.raise_()
+            _start_foreground_watch()

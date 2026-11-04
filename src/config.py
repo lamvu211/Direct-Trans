@@ -196,6 +196,25 @@ class Config:
         self.data["popup_styles"][theme_id] = cur
         self.save()
 
+    def get_popup_window_size(self) -> dict | None:
+        raw = self.data.get("popup_window_size")
+        if not isinstance(raw, dict):
+            return None
+        try:
+            w = int(raw.get("width"))
+            h = int(raw.get("height"))
+        except (TypeError, ValueError):
+            return None
+        if w < 690 or h < 468:
+            return None
+        return {"width": w, "height": h}
+
+    def set_popup_window_size(self, width: int, height: int) -> None:
+        w = max(690, int(width))
+        h = max(468, int(height))
+        self.data["popup_window_size"] = {"width": w, "height": h}
+        self.save()
+
     # --- Provider ---
     def get_provider(self) -> str:
         return self.data.get('translation_provider', DEFAULT_PROVIDER)

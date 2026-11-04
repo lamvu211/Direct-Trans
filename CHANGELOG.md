@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.0.13
+- **Popup**: Hide when you click outside the popup bounds (Qt geometry + Win32 `WM_NCHITTEST`, including resize borders); 50ms mouse poll fallback. Resize/drag no longer dismisses the popup (`WM_ENTERSIZEMOVE` / `WM_EXITSIZEMOVE`).
+- **Popup**: User-resized window dimensions persist in `config.json` (`popup_window_size`) and restore on the next hotkey.
+- **Popup**: Alt+Tab to another top-level window still hides via foreground hook.
+- **Build**: `APP_VERSION` **2.0.13**; artifact **`DirectTrans_v2.0.13.exe`**.
+
 ## v2.0.12
 - **Popup UX**: Remove redundant toolbar close (✕) button; title-bar close unchanged. Popup no longer steals focus on show (preserves v2.0.10 copy/replace behavior). After the user clicks anywhere on the popup, keyboard focus moves to the popup so font size can be typed (9–36) and **Esc** closes the window.
 - **Update dialog**: Window title bar shows **DirectTrans Update** (localized message and buttons unchanged).
