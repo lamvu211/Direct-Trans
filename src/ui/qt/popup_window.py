@@ -522,6 +522,7 @@ class QtPopupWindow:
         self.clipboard_hints = None
         self.selection_state = None
         self._copy_reset_timer: QTimer | None = None
+        self._error_message: str | None = None
         self._state = STATE_READY
         self._popup_focus_engaged = False
         self._source_root_hwnd: int | None = None
@@ -554,6 +555,7 @@ class QtPopupWindow:
         selection_state: dict | None = None,
     ):
         self._ensure_app()
+        self._error_message = None
         self._popup_focus_engaged = False
         self._outside_click_grace_until = time.monotonic() + _OUTSIDE_CLICK_GRACE_SEC
         self.original_rtf = original_rtf
@@ -743,7 +745,11 @@ class QtPopupWindow:
         main.addWidget(text_container, 1)
 
         win.setFont(QFont(ui_font_family, 9))
-        if loading:
+        if self._state == STATE_READY and self.translated_text:
+            self.text_widget.setPlainText(self.translated_text)
+        elif self._state == STATE_ERROR and self._error_message:
+            self.text_widget.setPlainText(f"❌ {self._error_message}")
+        elif loading:
             self._state = STATE_LOADING
             self.text_widget.setPlainText(t["loading"])
         elif translated_text:
@@ -960,6 +966,11 @@ class QtPopupWindow:
 
     def _should_keep_visible_for_foreground(self, fg_hwnd: int) -> bool:
         """Keep popup while user stays in DirectTrans or the same top-level source window."""
+        # Never dismiss while loading translation
+        if self._state == STATE_LOADING:
+            return True
+
+
         fg_hwnd = _hwnd_int(fg_hwnd)
         if not fg_hwnd:
             return False
@@ -968,6 +979,7 @@ class QtPopupWindow:
             return False
         if fg_pid == _OUR_PROCESS_ID:
             return True
+
 
         source_root = self._source_root_hwnd
         if not source_root and self.original_hwnd:
@@ -1013,6 +1025,7 @@ class QtPopupWindow:
 
     def show_error(self, error_msg: str):
         self.translated_text = None
+        self._error_message = error_msg
         self._state = STATE_ERROR
         if not self.text_widget or not self.window:
             return

@@ -154,7 +154,7 @@ class DirectTransApp:
         self._startup_splash = None
         self._win32_startup_splash = None
         self.translation_thread = None
-        self._processing_lock = threading.Lock()
+        self._current_generation = 0
         self.config._theme_listener = self._on_ui_theme_changed
 
     def _on_ui_theme_changed(self, theme_id: str):
@@ -285,17 +285,6 @@ class DirectTransApp:
         if getattr(self, "_run_on_main", None):
             self._run_on_main(self._quit)
 
-    def _notify_hotkey_busy(self):
-        from ui.i18n import TRANSLATIONS
-
-        ui_lang = self.config.data.get("ui_language", "vi")
-        msgs = TRANSLATIONS.get(ui_lang, TRANSLATIONS["en"])
-        title = msgs.get("hotkey_busy_title", "DirectTrans")
-        message = msgs.get("hotkey_busy_msg", "Please wait.")
-        logging.info("Hotkey ignored: translation already in progress.")
-        if self.tray:
-            self.tray.notify(title, message)
-
     def _on_hotkey(self, hotkey_config: dict):
         """Callback when user presses a registered hotkey."""
         now = time.time()
@@ -304,27 +293,20 @@ class DirectTransApp:
             return
         self._last_hotkey_time = now
 
-        if not self._processing_lock.acquire(blocking=False):
-            if now - getattr(self, "_last_busy_notify", 0.0) > 2.0:
-                self._last_busy_notify = now
-                self._notify_hotkey_busy()
-            else:
-                logging.info("Hotkey ignored: translation already in progress.")
-            return
-
         if not self.enabled:
             logging.info("Hotkey pressed but app is paused.")
-            self._processing_lock.release()
             return
         if not self._gui_ready:
-            self._processing_lock.release()
             return
+
+        self._current_generation += 1
+        generation = self._current_generation
 
         logging.info(f"Hotkey triggered for language: {hotkey_config.get('target_language_code')} (Mode: {hotkey_config.get('mode')})")
 
         thread = threading.Thread(
             target=self._process_translation,
-            args=(hotkey_config,),
+            args=(hotkey_config, generation),
             daemon=True
         )
         thread.start()
@@ -375,106 +357,108 @@ class DirectTransApp:
             )
         self._run_on_main(show)
 
-    def _process_translation(self, hotkey_config: dict):
+    def _process_translation(self, hotkey_config: dict, generation: int):
         """Main translation processing logic."""
+        mode = hotkey_config['mode']
+        target_lang_code = hotkey_config['target_language_code']
+        target_lang_name = hotkey_config['target_language_name']
+
+        from ui.i18n import TRANSLATIONS
+        ui_lang = self.config.data.get('ui_language', 'vi')
+        msgs = TRANSLATIONS.get(ui_lang, TRANSLATIONS['en'])
+
+        import win32gui
         try:
-            mode = hotkey_config['mode']
-            target_lang_code = hotkey_config['target_language_code']
-            target_lang_name = hotkey_config['target_language_name']
+            original_hwnd = win32gui.GetForegroundWindow()
+            if original_hwnd:
+                original_hwnd = int(original_hwnd) & 0xFFFFFFFF
+        except Exception:
+            original_hwnd = None
 
-            from ui.i18n import TRANSLATIONS
-            ui_lang = self.config.data.get('ui_language', 'vi')
-            msgs = TRANSLATIONS.get(ui_lang, TRANSLATIONS['en'])
+        # 1. Get selected text
+        try:
+            selected_text, selected_rtf, clipboard_hints, selection_state = (
+                ClipboardUtil.get_selected_text()
+            )
+        except Exception as e:
+            logging.error(f"Failed to get selected text from clipboard: {e}")
+            self._show_error_popup(
+                msgs.get('err_clipboard_msg', 'Không thể lấy văn bản từ clipboard.'),
+                target_lang_name,
+                target_lang_code,
+            )
+            return
 
-            import win32gui
-            try:
-                original_hwnd = win32gui.GetForegroundWindow()
-                if original_hwnd:
-                    original_hwnd = int(original_hwnd) & 0xFFFFFFFF
-            except Exception:
-                original_hwnd = None
+        if not selected_text or not selected_text.strip():
+            logging.warning("Selected text is empty or only whitespace.")
+            self._show_error_popup(
+                msgs.get(
+                    'err_clipboard_empty_msg',
+                    'Hãy bôi đen đoạn cần dịch, rồi bấm phím tắt dịch.',
+                ),
+                target_lang_name,
+                target_lang_code,
+            )
+            return
 
-            # 1. Get selected text
-            try:
-                selected_text, selected_rtf, clipboard_hints, selection_state = (
-                    ClipboardUtil.get_selected_text()
-                )
-            except Exception as e:
-                logging.error(f"Failed to get selected text from clipboard: {e}")
-                self._show_error_popup(
-                    msgs.get('err_clipboard_msg', 'Không thể lấy văn bản từ clipboard.'),
-                    target_lang_name,
-                    target_lang_code,
-                )
+        # 2. If popup mode, show loading popup (API runs in parallel with UI build)
+        popup_holder: dict = {"popup": None}
+
+        if mode == MODE_POPUP:
+            if generation != self._current_generation:
                 return
+            logging.info("Spawning translation popup window.")
 
-            if not selected_text or not selected_text.strip():
-                logging.warning("Selected text is empty or only whitespace.")
-                self._show_error_popup(
-                    msgs.get(
-                        'err_clipboard_empty_msg',
-                        'Hãy bôi đen đoạn cần dịch, rồi bấm phím tắt dịch.',
-                    ),
-                    target_lang_name,
-                    target_lang_code,
+            def create_popup():
+                p = PopupWindow(self.config)
+                p.show(
+                    loading=True,
+                    target_lang=target_lang_name,
+                    original_rtf=selected_rtf,
+                    target_lang_code=target_lang_code,
+                    original_hwnd=original_hwnd,
+                    original_text=selected_text,
+                    clipboard_hints=clipboard_hints,
+                    selection_state=selection_state,
                 )
+                popup_holder["popup"] = p
+
+            self._run_on_main(create_popup)
+
+        if generation != self._current_generation:
+            return
+
+        # 3. Translate
+        try:
+            logging.info(f"Starting translation process to {target_lang_name} ({target_lang_code})...")
+            translation = self.translator.translate(
+                selected_text,
+                target_lang_name,
+                target_lang_code,
+                preserve_excel_layout=bool(clipboard_hints.get("excel")),
+            )
+            translated = translation.text
+            if clipboard_hints.get("excel"):
+                translated = ClipboardUtil.coerce_excel_paste_text(
+                    translated, selected_text
+                )
+            else:
+                translated = ClipboardUtil.align_translated_line_structure(
+                    selected_text, translated
+                )
+            provider_used = translation.provider
+            logging.info("Translation process completed successfully.")
+        except Exception as e:
+            if generation != self._current_generation:
                 return
+            err_msg = str(e)
+            logging.error(f"Translation failed: {err_msg}")
 
-            # 2. If popup mode, show loading popup first
-            popup = None
-            popup_event = threading.Event()
-
-            if mode == MODE_POPUP:
-                logging.info("Spawning translation popup window.")
-                def create_popup():
-                    nonlocal popup
-                    p = PopupWindow(self.config)
-                    p.show(
-                        loading=True, 
-                        target_lang=target_lang_name,
-                        original_rtf=selected_rtf,
-                        target_lang_code=target_lang_code,
-                        original_hwnd=original_hwnd,
-                        original_text=selected_text,
-                        clipboard_hints=clipboard_hints,
-                        selection_state=selection_state,
-                    )
-                    popup = p
-                    popup_event.set()
-
-                self._run_on_main(create_popup)
-                popup_event.wait(timeout=5.0)
-                if popup is None:
-                    logging.warning(
-                        "Loading popup was not created in time (5s); will show result popup after translate."
-                    )
-
-            # 3. Translate
-            try:
-                logging.info(f"Starting translation process to {target_lang_name} ({target_lang_code})...")
-                translation = self.translator.translate(
-                    selected_text,
-                    target_lang_name,
-                    target_lang_code,
-                    preserve_excel_layout=bool(clipboard_hints.get("excel")),
-                )
-                translated = translation.text
-                if clipboard_hints.get("excel"):
-                    translated = ClipboardUtil.coerce_excel_paste_text(
-                        translated, selected_text
-                    )
-                else:
-                    translated = ClipboardUtil.align_translated_line_structure(
-                        selected_text, translated
-                    )
-                provider_used = translation.provider
-                logging.info("Translation process completed successfully.")
-            except Exception as e:
-                err_msg = str(e)
-                logging.error(f"Translation failed: {err_msg}")
-                if popup:
-                    self._run_on_main(
-                        lambda msg=err_msg: popup.show_error(msgs.get('err_trans_title', 'Lỗi dịch: {}').format(msg))
+            def show_trans_error():
+                p = popup_holder.get("popup")
+                if p is not None:
+                    p.show_error(
+                        msgs.get('err_trans_title', 'Lỗi dịch: {}').format(err_msg)
                     )
                 else:
                     self._show_error_popup(
@@ -482,14 +466,26 @@ class DirectTransApp:
                         target_lang_name,
                         target_lang_code,
                     )
-                return
 
-            # 4. Output result
             if mode == MODE_POPUP:
-                if popup:
-                    def _finish_popup():
-                        popup.update_text(translated, provider_key=provider_used)
-                    self._run_on_main(_finish_popup)
+                self._run_on_main(show_trans_error)
+            else:
+                self._show_error_popup(
+                    msgs.get('err_trans_title', 'Lỗi dịch: {}').format(err_msg),
+                    target_lang_name,
+                    target_lang_code,
+                )
+            return
+
+        if generation != self._current_generation:
+            return
+
+        # 4. Output result
+        if mode == MODE_POPUP:
+            def _finish_popup():
+                p = popup_holder.get("popup")
+                if p is not None:
+                    p.update_text(translated, provider_key=provider_used)
                 else:
                     self._show_result_popup(
                         translated,
@@ -502,34 +498,38 @@ class DirectTransApp:
                         clipboard_hints,
                         selection_state,
                     )
-            elif mode == MODE_REPLACE:
-                try:
-                    ClipboardUtil.replace_selected_text(
-                        translated,
-                        selected_rtf,
-                        target_lang_code,
+
+            if generation != self._current_generation:
+                return
+            self._run_on_main(_finish_popup)
+        elif mode == MODE_REPLACE:
+            if generation != self._current_generation:
+                return
+            try:
+                ClipboardUtil.replace_selected_text(
+                    translated,
+                    selected_rtf,
+                    target_lang_code,
+                    original_text=selected_text,
+                    target_hwnd=original_hwnd,
+                    clipboard_hints=clipboard_hints,
+                    selection_state=selection_state,
+                )
+            except Exception:
+                def show_fallback():
+                    p = PopupWindow(self.config)
+                    p.show(
+                        translated_text=translated,
+                        target_lang=target_lang_name,
+                        original_rtf=selected_rtf,
+                        target_lang_code=target_lang_code,
+                        original_hwnd=original_hwnd,
                         original_text=selected_text,
-                        target_hwnd=original_hwnd,
+                        provider_key=provider_used,
                         clipboard_hints=clipboard_hints,
                         selection_state=selection_state,
                     )
-                except Exception:
-                    def show_fallback():
-                        p = PopupWindow(self.config)
-                        p.show(
-                            translated_text=translated,
-                            target_lang=target_lang_name,
-                            original_rtf=selected_rtf,
-                            target_lang_code=target_lang_code,
-                            original_hwnd=original_hwnd,
-                            original_text=selected_text,
-                            provider_key=provider_used,
-                            clipboard_hints=clipboard_hints,
-                            selection_state=selection_state,
-                        )
-                    self._run_on_main(show_fallback)
-        finally:
-            self._processing_lock.release()
+                self._run_on_main(show_fallback)
 
     def _dismiss_startup_splash(self) -> None:
         win32_splash = getattr(self, "_win32_startup_splash", None)
@@ -630,6 +630,11 @@ class DirectTransApp:
             self.hotkey_manager.stop()
         if self.tray:
             self.tray.stop()
+        if getattr(self, "translator", None):
+            try:
+                self.translator.close()
+            except Exception:
+                logging.exception("Failed to close translation HTTP sessions")
         if hasattr(sys, 'app_mutex') and sys.app_mutex:
             try:
                 win32api.CloseHandle(sys.app_mutex)

@@ -6,6 +6,8 @@ import re
 import requests
 import logging
 import time
+import urllib3.util
+from requests.adapters import HTTPAdapter
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
@@ -150,27 +152,53 @@ class TranslationBackend(ABC):
 
 
 class BaseHTTPTranslator(TranslationBackend):
+    def __init__(self):
+        self._session = None
+
+    def _get_session(self) -> requests.Session:
+        if self._session is None:
+            session = requests.Session()
+            adapter = HTTPAdapter(
+                pool_connections=4,
+                pool_maxsize=8,
+                max_retries=urllib3.util.Retry(total=0),
+            )
+            session.mount("https://", adapter)
+            session.mount("http://", adapter)
+            self._session = session
+        return self._session
+
+    def close(self) -> None:
+        if self._session is not None:
+            try:
+                self._session.close()
+            except Exception:
+                pass
+            self._session = None
+
+    def _reset_session(self) -> None:
+        self.close()
+
     def _make_request_with_retry(
         self, url, headers, json_payload=None, form_data=None, params=None, method="post"
     ):
-        import time
-        import requests
-        max_retries = 3
+        max_retries = 1
         retry_delay = 1.0
 
         for attempt in range(max_retries):
             try:
+                session = self._get_session()
                 if method == "post":
                     if form_data is not None:
-                        resp = requests.post(
-                            url, headers=headers, data=form_data, params=params, timeout=30
+                        resp = session.post(
+                            url, headers=headers, data=form_data, params=params, timeout=12
                         )
                     else:
-                        resp = requests.post(
-                            url, headers=headers, json=json_payload, params=params, timeout=30
+                        resp = session.post(
+                            url, headers=headers, json=json_payload, params=params, timeout=12
                         )
                 else:
-                    resp = requests.get(url, headers=headers, params=params, timeout=30)
+                    resp = session.get(url, headers=headers, params=params, timeout=12)
                 resp.raise_for_status()
                 return resp.json()
             except requests.exceptions.HTTPError as e:
@@ -182,6 +210,7 @@ class BaseHTTPTranslator(TranslationBackend):
                     continue
                 raise TranslationError(_sanitize_error_message(f"API error: {e}"))
             except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+                self._reset_session()
                 if attempt < max_retries - 1:
                     logging.warning(f"Network error ({e}). Retrying in {retry_delay}s... (Attempt {attempt + 1}/{max_retries})")
                     time.sleep(retry_delay)
@@ -236,9 +265,6 @@ def _system_prompt(target_lang_name: str, preserve_excel_layout: bool = False) -
 
 
 class GeminiTranslator(BaseHTTPTranslator):
-    def __init__(self):
-        pass
-
     def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
         api_key = kwargs.get('api_key', '')
         model = kwargs.get('model', 'gemini-flash-lite-latest')
@@ -258,8 +284,8 @@ class GeminiTranslator(BaseHTTPTranslator):
                 "parts": [{"text": f"<text>\n{text}\n</text>"}]
             }],
             "generationConfig": {
-                "temperature": 0.3
-            }
+                "temperature": 0.3,
+            },
         }
 
         try:
@@ -279,9 +305,6 @@ class GeminiTranslator(BaseHTTPTranslator):
 
 
 class GroqTranslator(BaseHTTPTranslator):
-    def __init__(self):
-        pass
-
     def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
         api_key = kwargs.get('api_key', '')
         model = kwargs.get('model', 'openai/gpt-oss-120b')
@@ -302,7 +325,7 @@ class GroqTranslator(BaseHTTPTranslator):
                 {"role": "system", "content": system},
                 {"role": "user", "content": f"<text>\n{text}\n</text>"}
             ],
-            "temperature": 0.3
+            "temperature": 0.3,
         }
 
         try:
@@ -315,9 +338,6 @@ class GroqTranslator(BaseHTTPTranslator):
 
 
 class MistralTranslator(BaseHTTPTranslator):
-    def __init__(self):
-        pass
-
     def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
         api_key = kwargs.get('api_key', '')
         model = kwargs.get('model', 'codestral-latest')
@@ -495,4 +515,10 @@ class TranslationManager:
                 continue
 
         raise TranslationError(f"All translation providers failed. Last error: {last_error}")
+
+    def close(self) -> None:
+        for backend in self.backends.values():
+            close = getattr(backend, "close", None)
+            if callable(close):
+                close()
 

@@ -30,8 +30,17 @@ class TestUiQaFixes(unittest.TestCase):
     def setUp(self):
         self.config = Config()
         self.config.data['popup_styles'] = {}
+        self.config.data.pop('popup_window_size', None)
         if not self.config.get_hotkeys():
             self.config.data['hotkeys'] = list(self.config.DEFAULT_CONFIG['hotkeys'])
+
+    def tearDown(self):
+        if hasattr(self, 'config') and self.config:
+            self.config.data.pop('popup_window_size', None)
+            try:
+                self.config.save()
+            except Exception:
+                pass
 
     def test_issue_01_popup_textedit_dark_theme(self):
         """ISSUE-01: QTextEdit in popup is themed, not raw white in dark themes."""

@@ -17,6 +17,10 @@ CF_RTF = win32clipboard.RegisterClipboardFormat("Rich Text Format")
 # Wait after Ctrl+V before restoring the user's clipboard (slow apps need more time).
 CLIPBOARD_PASTE_SETTLE_DELAY = 0.65
 
+# Poll after synthetic copy: 30 × 20ms ≈ 600ms max (matches QTranslate-style cadence).
+_CLIPBOARD_SEQUENCE_POLL_INTERVAL = 0.02
+_CLIPBOARD_SEQUENCE_POLL_ATTEMPTS = 30
+
 # Substrings of registered clipboard format names that indicate Excel / spreadsheet copy.
 _EXCEL_CLIPBOARD_NAME_FRAGMENTS = (
     "biff",
@@ -69,30 +73,28 @@ class ClipboardUtil:
         while time.time() - start < 0.2:
             ctrl_down = win32api.GetAsyncKeyState(win32con.VK_CONTROL) & 0x8000
             shift_down = win32api.GetAsyncKeyState(win32con.VK_SHIFT) & 0x8000
-            v_down = win32api.GetAsyncKeyState(0x56) & 0x8000
-            if not (ctrl_down or shift_down or v_down):
+            alt_down = win32api.GetAsyncKeyState(win32con.VK_MENU) & 0x8000
+            if not (ctrl_down or shift_down or alt_down):
                 break
             time.sleep(0.02)
 
+        # Release modifiers first so Shift/Alt don't contaminate the synthetic Ctrl+C chord
+        release_modifier_keys()
+        time.sleep(0.02)
+
         if is_wechat_foreground():
-            release_modifier_keys()
-            time.sleep(0.03)
             send_ctrl_c_keybd()
             return
 
         send_ctrl_c_sendinput()
-        time.sleep(0.03)
-        release_modifier_keys()
-        time.sleep(0.03)
-        send_ctrl_c_keybd()
 
     @staticmethod
     def _poll_clipboard_after_copy(sentinel: str) -> tuple[str, dict | None, bytes | None]:
         selected_text = ""
         selected_rtf = None
         clipboard_hints = {"excel": False}
-        for _ in range(12):
-            time.sleep(0.05)
+        for _ in range(_CLIPBOARD_SEQUENCE_POLL_ATTEMPTS):
+            time.sleep(_CLIPBOARD_SEQUENCE_POLL_INTERVAL)
             current_dict, clipboard_hints = ClipboardUtil._read_clipboard()
             txt = current_dict.get(win32con.CF_UNICODETEXT, "")
             if isinstance(txt, str) and txt != sentinel:
@@ -396,8 +398,8 @@ class ClipboardUtil:
         selected_rtf = None
         clipboard_hints = {"excel": False}
 
-        for _ in range(12):
-            time.sleep(0.05)
+        for _ in range(_CLIPBOARD_SEQUENCE_POLL_ATTEMPTS):
+            time.sleep(_CLIPBOARD_SEQUENCE_POLL_INTERVAL)
             if user32.GetClipboardSequenceNumber() != seq_before:
                 changed = True
                 break
@@ -419,8 +421,8 @@ class ClipboardUtil:
                 seq_retry = user32.GetClipboardSequenceNumber()
                 time.sleep(0.06)
                 ClipboardUtil._copy_selection_to_clipboard()
-                for _ in range(12):
-                    time.sleep(0.05)
+                for _ in range(_CLIPBOARD_SEQUENCE_POLL_ATTEMPTS):
+                    time.sleep(_CLIPBOARD_SEQUENCE_POLL_INTERVAL)
                     if user32.GetClipboardSequenceNumber() != seq_retry:
                         break
                 retry_dict, clipboard_hints = ClipboardUtil._read_clipboard()

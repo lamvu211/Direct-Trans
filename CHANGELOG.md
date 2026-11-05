@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.0.14
+- **Performance**: Reuse HTTP keep-alive sessions for translation APIs; start API calls without waiting for popup UI; poll clipboard sequence at 20ms (600ms max). Model thinking/reasoning left at provider defaults (not disabled in API payloads).
+- **Build**: `APP_VERSION` **2.0.14**; artifact **`DirectTrans_v2.0.14.exe`**.
+
 ## v2.0.13
 - **Popup**: Hide when you click outside the popup bounds (Qt geometry + Win32 `WM_NCHITTEST`, including resize borders); 50ms mouse poll fallback. Resize/drag no longer dismisses the popup (`WM_ENTERSIZEMOVE` / `WM_EXITSIZEMOVE`).
 - **Popup**: User-resized window dimensions persist in `config.json` (`popup_window_size`) and restore on the next hotkey.

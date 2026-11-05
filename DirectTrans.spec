@@ -26,7 +26,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='DirectTrans_v2.0.13',
+    name='DirectTrans_v2.0.14',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
