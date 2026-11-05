@@ -1,6 +1,7 @@
 # Changelog
 
 ## v2.0.15
+- **Excel / Translation**: Fix unquoted Excel cells being returned untranslated in Vietnamese; generalize `EXCEL_LAYOUT_ADDON` to handle both quoted and unquoted TSV cells without few-shot collision.
 - **Fix**: Revert foreground grace period and PID checks in popup window; isolate test config geometry.
 - **Build**: `APP_VERSION` **2.0.15**; artifact **`DirectTrans_v2.0.15.exe`**.
 

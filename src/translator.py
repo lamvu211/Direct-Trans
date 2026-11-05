@@ -250,11 +250,10 @@ TERMINOLOGY & CONVENTIONS:
 
 EXCEL_LAYOUT_ADDON = """
 
-EXCEL CLIPBOARD (quoted TSV):
-- The source is copied from Excel. Double quotes (\") mark cell boundaries; text inside quotes is one cell (\\n inside quotes stays inside that cell).
-- Keep every double quote, doubled quote (\"\"), TAB, and line break in the exact same positions as the source.
-- Translate only the readable text inside each cell; do not add, remove, or move quotes or delimiters.
-- Example: \"Hello\" → \"Xin chào\"; \"Line one\\nLine two\" → \"Dòng một\\nDòng hai\" (outer quotes unchanged)."""
+EXCEL CLIPBOARD (TSV):
+- The source is copied from Excel (tab/newline separated cells). If cells contain double quotes (\"), preserve those quotes and their boundaries (\\n inside quotes stays inside that cell).
+- Keep all delimiters (TAB, newlines, and quotes) in the exact same positions as the source.
+- Translate the readable text in all cells (whether enclosed in quotes or unquoted)."""
 
 
 def _system_prompt(target_lang_name: str, preserve_excel_layout: bool = False) -> str:

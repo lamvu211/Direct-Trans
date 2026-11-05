@@ -39,7 +39,7 @@ TERMINOLOGY & CONVENTIONS:
 - Preserve personal titles exactly as written (Mr., Ms., Mrs., etc.). Do not add, change, or infer job titles or ranks.
 ```
 
-When translating an Excel selection (single API call), the app sends the **raw quoted clipboard text** and appends `EXCEL_LAYOUT_ADDON` in `src/translator.py`: preserve double quotes, TAB, and line breaks; translate only text inside quotes.
+When translating an Excel selection (single API call), the app sends the **raw quoted clipboard text** and appends `EXCEL_LAYOUT_ADDON` in `src/translator.py`: preserve delimiters (TAB, newlines, and quotes); translate readable text across all cells (quoted or unquoted).
 
 ## Usage in app
 
