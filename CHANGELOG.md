@@ -1,5 +1,9 @@
 # Changelog
 
+## v2.0.15
+- **Fix**: Revert foreground grace period and PID checks in popup window; isolate test config geometry.
+- **Build**: `APP_VERSION` **2.0.15**; artifact **`DirectTrans_v2.0.15.exe`**.
+
 ## v2.0.14
 - **Performance**: Reuse HTTP keep-alive sessions for translation APIs; start API calls without waiting for popup UI; poll clipboard sequence at 20ms (600ms max). Model thinking/reasoning left at provider defaults (not disabled in API payloads).
 - **Build**: `APP_VERSION` **2.0.14**; artifact **`DirectTrans_v2.0.14.exe`**.
