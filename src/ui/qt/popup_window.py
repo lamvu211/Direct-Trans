@@ -24,8 +24,13 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from constants import (
+    POPUP_WINDOW_MIN_HEIGHT,
+    POPUP_WINDOW_MIN_WIDTH,
+    PROVIDERS_NEED_API_KEY,
+)
 from font_mapper import FontMapper
-from ui.i18n import provider_display_name, theme_label_for
+from ui.i18n import PROVIDERS, provider_display_name, theme_label_for
 from ui.qt.dispatch import run_on_main
 from ui.qt.theme import qss_for, THEME_IDS
 from ui.qt.widgets import apply_premium_app, fit_combo_to_contents
@@ -36,8 +41,6 @@ STATE_ERROR = "error"
 
 POPUP_FONT_SIZE_MIN = 9
 POPUP_FONT_SIZE_MAX = 36
-POPUP_WINDOW_MIN_WIDTH = 690
-POPUP_WINDOW_MIN_HEIGHT = 468
 POPUP_WINDOW_DEFAULT_WIDTH = 810
 POPUP_WINDOW_DEFAULT_HEIGHT = 546
 
@@ -396,6 +399,7 @@ class _ThemedPopupWidget(QWidget):
                     self.owner._in_size_move = True
                 elif msg.message == WM_EXITSIZEMOVE:
                     self.owner._in_size_move = False
+                    self.owner._clamp_window_size()
                     self.owner._save_popup_window_size()
             except Exception:
                 logging.debug("nativeEvent size-move handling failed", exc_info=True)
@@ -445,7 +449,7 @@ class QtPopupWindow:
             "replace_btn": "✏ Replace",
             "copy_btn": "📋 Copy",
             "copied_feedback": "✓ Copied!",
-            "loading": "⏳ Translating...",
+            "loading": "Translating...",
             "replace_error": "Replacement error:",
             "status_by": "Translated by {provider}",
             "font_style_label": "Font color & size",
@@ -508,9 +512,15 @@ class QtPopupWindow:
         self.original_rtf = None
         self.original_text = None
         self.target_lang_code = None
+        self.target_lang_name = None
         self.translated_text = None
         self.provider_key = None
-        self.status_label: QLabel | None = None
+        self.provider_combo: QComboBox | None = None
+        self._provider_map: dict[str, str] = {}
+        self._provider_rev: dict[str, str] = {}
+        self._provider_notice: QLabel | None = None
+        self._provider_change_callback = None
+        self._retranslate_token = 0
         self.copy_btn: QPushButton | None = None
         self.replace_btn: QPushButton | None = None
         self.color_btn: QPushButton | None = None
@@ -563,6 +573,7 @@ class QtPopupWindow:
         self.clipboard_hints = clipboard_hints
         self.selection_state = selection_state
         self.target_lang_code = target_lang_code
+        self.target_lang_name = target_lang or ""
         self.translated_text = translated_text
         self.provider_key = provider_key
         self.original_hwnd = original_hwnd
@@ -591,7 +602,15 @@ class QtPopupWindow:
         target_lang_display = self._localized_target_name(ui_lang, target_lang, target_lang_code)
         title = f"{t['title_prefix']} → {target_lang_display}" if target_lang_display else "DirectTrans"
         win.setWindowTitle(title)
-        win.setMinimumSize(POPUP_WINDOW_MIN_WIDTH, POPUP_WINDOW_MIN_HEIGHT)
+        screen_for_min = self._screen_at_cursor()
+        if screen_for_min is not None:
+            avail_min = screen_for_min.availableGeometry()
+            win.setMinimumSize(
+                min(POPUP_WINDOW_MIN_WIDTH, avail_min.width()),
+                min(POPUP_WINDOW_MIN_HEIGHT, avail_min.height()),
+            )
+        else:
+            win.setMinimumSize(POPUP_WINDOW_MIN_WIDTH, POPUP_WINDOW_MIN_HEIGHT)
 
         self._apply_popup_window_size(win)
 
@@ -614,16 +633,32 @@ class QtPopupWindow:
         header = QHBoxLayout(header_container)
         header.setContentsMargins(12, 10, 12, 10)
         header.setSpacing(6)
-        self.status_label = QLabel("")
-        self.status_label.setObjectName("statusBy")
-        self.status_label.setAlignment(
-            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        from PySide6.QtWidgets import QSizePolicy
+
+        self.provider_combo = QComboBox()
+        self.provider_combo.setObjectName("themeCombo")
+        self.provider_combo.setFixedHeight(24)
+        self.provider_combo.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self._provider_map = {label: key for label, key in PROVIDERS}
+        self._provider_rev = {key: label for label, key in PROVIDERS}
+        for label, _key in PROVIDERS:
+            self.provider_combo.addItem(label, _key)
+        cur_provider = self.provider_key or (
+            self.config.get_provider() if self.config else PROVIDERS[0][1]
         )
-        header.addWidget(self.status_label, 1)
+        idx = self.provider_combo.findData(cur_provider)
+        if idx < 0:
+            idx = 0
+        self.provider_combo.setCurrentIndex(idx)
+        self.provider_key = self.provider_combo.currentData()
+        self.provider_combo.currentIndexChanged.connect(self._on_provider_combo_changed)
+        if hasattr(self.provider_combo, "view") and self.provider_combo.view():
+            self.provider_combo.view().setTextElideMode(Qt.TextElideMode.ElideNone)
+        fit_combo_to_contents(self.provider_combo, padding=28)
+        header.addWidget(self.provider_combo, 0, Qt.AlignmentFlag.AlignVCenter)
         header.addStretch(1)
 
         # 1. ComboBox chọn Theme (nằm bên trái "Font color & size", độ cao 24px)
-        from PySide6.QtWidgets import QSizePolicy
         self.theme_combo = QComboBox()
         self.theme_combo.setObjectName("themeCombo")
         self.theme_combo.setFixedHeight(24)
@@ -721,6 +756,13 @@ class QtPopupWindow:
         header.addLayout(actions)
         main.addWidget(header_container)
 
+        self._provider_notice = QLabel("")
+        self._provider_notice.setObjectName("providerNotice")
+        self._provider_notice.setWordWrap(True)
+        self._provider_notice.setContentsMargins(12, 4, 12, 4)
+        self._provider_notice.hide()
+        main.addWidget(self._provider_notice)
+
         self.divider = QFrame()
         self.divider.setObjectName("popupDivider")
         self.divider.setFixedHeight(1)
@@ -758,11 +800,12 @@ class QtPopupWindow:
         else:
             self._state = STATE_READY
 
-        self._refresh_status_label(t)
+        self._sync_provider_notice()
         self._sync_action_buttons()
         self.window = win
         _install_popup_click_focus(win)
         QtPopupWindow.open_popups.append(self)
+        self._clamp_window_size()
         win.show()
         self._center_on_work_area(win)
         QTimer.singleShot(0, lambda w=win: self._center_on_work_area(w))
@@ -907,11 +950,16 @@ class QtPopupWindow:
         popup_h = min(740, max(507, int(avail_h * 0.50)))
         return popup_w, popup_h
 
+    def set_provider_change_callback(self, callback) -> None:
+        self._provider_change_callback = callback
+
     def _apply_popup_window_size(self, win: QWidget) -> None:
         """Use saved config size or default for this monitor."""
         saved = self.config.get_popup_window_size() if self.config else None
         if saved:
-            win.resize(int(saved["width"]), int(saved["height"]))
+            w = max(POPUP_WINDOW_MIN_WIDTH, int(saved["width"]))
+            h = max(POPUP_WINDOW_MIN_HEIGHT, int(saved["height"]))
+            win.resize(w, h)
             return
         screen = self._screen_at_cursor()
         if screen is None:
@@ -921,14 +969,107 @@ class QtPopupWindow:
         popup_w, popup_h = self._popup_dimensions(avail.width(), avail.height())
         win.resize(popup_w, popup_h)
 
+    def _clamp_window_size(self) -> None:
+        if not self.window:
+            return
+        w = self.window.width()
+        h = self.window.height()
+        screen = self._screen_at_cursor()
+        if screen is not None:
+            avail = screen.availableGeometry()
+            min_w = min(POPUP_WINDOW_MIN_WIDTH, avail.width())
+            min_h = min(POPUP_WINDOW_MIN_HEIGHT, avail.height())
+            w = max(min_w, min(w, avail.width()))
+            h = max(min_h, min(h, avail.height()))
+        else:
+            w = max(POPUP_WINDOW_MIN_WIDTH, w)
+            h = max(POPUP_WINDOW_MIN_HEIGHT, h)
+        if w != self.window.width() or h != self.window.height():
+            self.window.resize(w, h)
+
     def _save_popup_window_size(self) -> None:
         if not self.config or not self.window:
             return
-        fg = self.window.frameGeometry()
-        w, h = fg.width(), fg.height()
-        if w < POPUP_WINDOW_MIN_WIDTH or h < POPUP_WINDOW_MIN_HEIGHT:
-            w, h = self.window.width(), self.window.height()
+        self._clamp_window_size()
+        w, h = self.window.width(), self.window.height()
         self.config.set_popup_window_size(w, h)
+
+    def sync_provider_from_config(self, provider_key: str | None = None) -> None:
+        """Update combo when provider changes from Settings (no retranslate)."""
+        if not self.provider_combo:
+            return
+        key = provider_key or (self.config.get_provider() if self.config else None)
+        if not key:
+            return
+        idx = self.provider_combo.findData(key)
+        if idx < 0:
+            return
+        self.provider_combo.blockSignals(True)
+        self.provider_combo.setCurrentIndex(idx)
+        self.provider_combo.blockSignals(False)
+        self.provider_key = key
+        self._sync_provider_notice()
+
+    def _on_provider_combo_changed(self, _index: int) -> None:
+        if not self.provider_combo:
+            return
+        key = self.provider_combo.currentData()
+        if not key or key == self.provider_key:
+            return
+        self.provider_key = key
+        self._sync_provider_notice()
+        if self._provider_change_callback:
+            try:
+                self._provider_change_callback(self, key)
+            except Exception:
+                logging.exception("Popup provider change callback failed")
+
+    def _sync_provider_notice(self) -> None:
+        if not self._provider_notice:
+            return
+        key = self.provider_key or (self.config.get_provider() if self.config else None)
+        needs_key = (
+            key in PROVIDERS_NEED_API_KEY
+            and self.config
+            and not self.config.get_api_key(key)
+        )
+        if needs_key:
+            t = self._t()
+            self._provider_notice.setText(t.get("err_api_key_msg", "Please open Settings to enter your API Key."))
+            self._provider_notice.show()
+        else:
+            self._provider_notice.hide()
+
+    def cancel_in_flight_work(self) -> None:
+        self._retranslate_token += 1
+
+    def begin_retranslate(self) -> int:
+        """Switch popup to loading while re-translating after provider change."""
+        self._retranslate_token += 1
+        token = self._retranslate_token
+        self._state = STATE_LOADING
+        t = self._t()
+        if self.text_widget:
+            self.text_widget.setPlainText(t["loading"])
+        self._sync_action_buttons()
+        return token
+
+    def finish_retranslate(
+        self,
+        token: int,
+        translated_text: str | None,
+        provider_key: str | None,
+        error_msg: str | None = None,
+    ) -> None:
+        if token != self._retranslate_token:
+            return
+        if error_msg:
+            self.show_error(error_msg)
+            self._sync_provider_notice()
+            return
+        if translated_text is not None:
+            self.update_text(translated_text, provider_key=provider_key)
+        self._sync_provider_notice()
 
     def _place_on_monitor(self, win: QWidget):
         """Legacy hook; sizing handled in _apply_popup_window_size."""
@@ -994,16 +1135,6 @@ class QtPopupWindow:
         fg_root = _root_hwnd(fg_hwnd)
         return bool(fg_root and fg_root == source_root)
 
-    def _refresh_status_label(self, t=None):
-        if not self.status_label:
-            return
-        t = t or self._t()
-        if self.provider_key:
-            name = provider_display_name(self.provider_key)
-            self.status_label.setText(t["status_by"].format(provider=name))
-        else:
-            self.status_label.setText("")
-
     def _sync_action_buttons(self) -> None:
         can_copy = self._state == STATE_READY and bool(self.translated_text)
         can_replace = can_copy and bool(self.target_lang_code)
@@ -1017,10 +1148,11 @@ class QtPopupWindow:
         self._state = STATE_READY
         if provider_key:
             self.provider_key = provider_key
+            self.sync_provider_from_config(provider_key)
         if not self.text_widget or not self.window:
             return
         self.text_widget.setPlainText(translated_text)
-        self._refresh_status_label()
+        self._sync_provider_notice()
         self._sync_action_buttons()
 
     def show_error(self, error_msg: str):
@@ -1030,8 +1162,7 @@ class QtPopupWindow:
         if not self.text_widget or not self.window:
             return
         self.text_widget.setPlainText(f"❌ {error_msg}")
-        if self.status_label:
-            self.status_label.setText("")
+        self._sync_provider_notice()
         self._sync_action_buttons()
 
     def _copy(self):

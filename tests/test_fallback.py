@@ -10,7 +10,7 @@ from config import Config
 from constants import (
     PROVIDER_GEMINI,
     PROVIDER_GROQ,
-    PROVIDER_MISTRAL,
+    PROVIDER_NVIDIA,
     PROVIDER_GOOGLE_FREE,
 )
 from translator import TranslationManager, TranslationError, TranslationBackend
@@ -36,7 +36,7 @@ class MockConfig:
             'translation_provider': provider,
             'fallback_enabled': fallback_enabled,
             'fallback_order': fallback_order or [
-                PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_MISTRAL, PROVIDER_GOOGLE_FREE,
+                PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_NVIDIA, PROVIDER_GOOGLE_FREE,
             ],
         }
         self._api_keys = api_keys or {}
@@ -53,8 +53,8 @@ class MockConfig:
     def get_groq_model(self):
         return 'groq-test'
 
-    def get_mistral_model(self):
-        return 'mistral-test'
+    def get_nvidia_model(self):
+        return 'nvidia-test'
 
 
 class TestFallbackChain(unittest.TestCase):
@@ -85,7 +85,7 @@ class TestFallbackChain(unittest.TestCase):
         mgr = self._manager_with_stubs(config, {
             PROVIDER_GEMINI: gemini,
             PROVIDER_GROQ: groq,
-            PROVIDER_MISTRAL: StubBackend(result='skip'),
+            PROVIDER_NVIDIA: StubBackend(result='skip'),
             PROVIDER_GOOGLE_FREE: StubBackend(result='skip'),
         })
         result = mgr.translate('Hello', 'Vietnamese', 'vi')
@@ -151,6 +151,24 @@ class TestFallbackChain(unittest.TestCase):
         result = mgr.translate('Hi', 'Vietnamese', 'vi')
         self.assertEqual(result.text, 'Hi there')
 
+    def test_translate_with_provider_no_fallback(self):
+        config = MockConfig(api_keys={PROVIDER_GROQ: "key2"})
+        groq = StubBackend(result="from groq")
+        gemini = StubBackend(result="from gemini")
+        mgr = self._manager_with_stubs(
+            config,
+            {
+                PROVIDER_GEMINI: gemini,
+                PROVIDER_GROQ: groq,
+            },
+        )
+        config.data["translation_provider"] = PROVIDER_GEMINI
+        result = mgr.translate_with_provider(
+            PROVIDER_GROQ, "Hi", "Vietnamese", "vi"
+        )
+        self.assertEqual(result.text, "from groq")
+        self.assertEqual(result.provider, PROVIDER_GROQ)
+
     def test_all_providers_fail_raises(self):
         config = MockConfig(api_keys={
             PROVIDER_GEMINI: 'k1',
@@ -159,7 +177,7 @@ class TestFallbackChain(unittest.TestCase):
         mgr = self._manager_with_stubs(config, {
             PROVIDER_GEMINI: StubBackend(error=TranslationError('a')),
             PROVIDER_GROQ: StubBackend(error=TranslationError('b')),
-            PROVIDER_MISTRAL: StubBackend(error=TranslationError('c')),
+            PROVIDER_NVIDIA: StubBackend(error=TranslationError('c')),
             PROVIDER_GOOGLE_FREE: StubBackend(error=TranslationError('d')),
         })
         with self.assertRaises(TranslationError) as ctx:

@@ -10,12 +10,21 @@ from ui.qt.settings_window import QtSettingsWindow, ensure_qt_app
 class SettingsWindow:
     """API-compatible wrapper used by main.py (formerly Tk Toplevel)."""
 
-    def __init__(self, root, config, on_save_callback, on_close_callback=None, hotkey_manager=None):
+    def __init__(
+        self,
+        root,
+        config,
+        on_save_callback,
+        on_close_callback=None,
+        hotkey_manager=None,
+        on_before_api_test=None,
+    ):
         self.root = root  # kept for popup / legacy references
         self.config = config
         self.on_save_callback = on_save_callback
         self.on_close_callback = on_close_callback
         self.hotkey_manager = hotkey_manager
+        self.on_before_api_test = on_before_api_test
         self.window = None
         self._qt: QtSettingsWindow | None = None
 
@@ -32,6 +41,10 @@ class SettingsWindow:
         if self._qt is not None:
             self._qt.set_theme(theme_id)
 
+    def sync_provider(self, provider_key: str) -> None:
+        if self._qt is not None:
+            self._qt.sync_provider_from_config(provider_key)
+
     def show(self):
         ensure_qt_app()
         if self._qt is None:
@@ -40,11 +53,10 @@ class SettingsWindow:
                 self.on_save_callback,
                 self._handle_close,
                 self.hotkey_manager,
+                on_before_api_test=self.on_before_api_test,
             )
             self.window = self._qt
-        self._qt.show()
-        self._qt.raise_()
-        self._qt.activateWindow()
+        self._qt.restore_and_focus()
 
     def _handle_close(self):
         self._qt = None

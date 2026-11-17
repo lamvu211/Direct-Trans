@@ -1,5 +1,16 @@
 # Changelog
 
+## v2.0.17
+- **Providers**: Replaced **OpenRouter** with **NVIDIA NIM** (`POST https://integrate.api.nvidia.com/v1/chat/completions`). Default model **`nvidia/nemotron-3.5-bolt-e4b`**; **Load Models** uses a fixed list (no catalog API). OpenRouter/Mistral keys and fallback slot migrate to NVIDIA in `config.json`.
+- **Build**: `APP_VERSION` **2.0.17**; artifact **`DirectTrans_v2.0.17.exe`**.
+
+## v2.0.16
+- **OpenRouter Load Models**: Query catalog with `max_price=0` and chat-completions filter; list only official `:free` variants, with **`openrouter/free`** (Free Models Router) pinned first and as default.
+- **Popup**: Raised minimum window size and toolbar layout so controls no longer overlap when resized narrow.
+- **Popup**: Replaced “Translated by …” with a **Provider** dropdown synced with Settings; missing API key banner matches Settings i18n; switching provider re-translates the full selection.
+- **Providers**: Removed **Mistral**; added **OpenRouter** (`openrouter/free` default model, free-tier model list on Load Models). Existing Mistral keys migrate to OpenRouter in `config.json`.
+- **Build**: `APP_VERSION` **2.0.16**; artifact **`DirectTrans_v2.0.16.exe`**.
+
 ## v2.0.15
 - **Excel / Translation**: Fix unquoted Excel cells being returned untranslated in Vietnamese; generalize `EXCEL_LAYOUT_ADDON` to handle both quoted and unquoted TSV cells without few-shot collision.
 - **Fix**: Revert foreground grace period and PID checks in popup window; isolate test config geometry.

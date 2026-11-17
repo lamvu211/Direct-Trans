@@ -3,7 +3,7 @@
 from constants import (
     PROVIDER_GEMINI,
     PROVIDER_GROQ,
-    PROVIDER_MISTRAL,
+    PROVIDER_NVIDIA,
     PROVIDER_GOOGLE_FREE,
 )
 
@@ -30,7 +30,7 @@ LANGUAGES = [
 PROVIDERS = [
     ("Gemini", PROVIDER_GEMINI),
     ("GroqCloud", PROVIDER_GROQ),
-    ("Mistral", PROVIDER_MISTRAL),
+    ("NVIDIA NIM", PROVIDER_NVIDIA),
     ("Google Free", PROVIDER_GOOGLE_FREE),
 ]
 
@@ -78,6 +78,7 @@ TRANSLATIONS = {
         'test_running': '⏳...',
         'test_pass': 'Thành công',
         'test_fail': 'Thất bại',
+        'test_timeout': 'Timeout',
         'net_error': 'Lỗi mạng',
         'dialog_add_title': 'Thêm phím tắt',
         'dialog_edit_title': 'Sửa phím tắt',
@@ -163,6 +164,7 @@ TRANSLATIONS = {
         'test_running': '⏳...',
         'test_pass': 'Pass',
         'test_fail': 'Fail',
+        'test_timeout': 'Timeout',
         'net_error': 'Net Error',
         'dialog_add_title': 'Add Hotkey',
         'dialog_edit_title': 'Edit Hotkey',
@@ -248,6 +250,7 @@ TRANSLATIONS = {
         'test_running': '⏳...',
         'test_pass': '통과',
         'test_fail': '실패',
+        'test_timeout': 'Timeout',
         'net_error': '네트워크 오류',
         'dialog_add_title': '단축키 추가',
         'dialog_edit_title': '단축키 수정',
@@ -333,6 +336,7 @@ TRANSLATIONS = {
         'test_running': '⏳...',
         'test_pass': '通过',
         'test_fail': '失败',
+        'test_timeout': 'Timeout',
         'net_error': '网络错误',
         'dialog_add_title': '添加快捷键',
         'dialog_edit_title': '编辑快捷键',
@@ -417,6 +421,7 @@ TRANSLATIONS = {
         'test_running': '⏳...',
         'test_pass': '合格',
         'test_fail': '不合格',
+        'test_timeout': 'Timeout',
         'net_error': 'ネットエラー',
         'dialog_add_title': 'ショートカットを追加',
         'dialog_edit_title': 'ショートカットの編集',

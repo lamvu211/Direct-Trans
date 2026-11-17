@@ -9,7 +9,7 @@ from translator import (
     BaseHTTPTranslator,
     GeminiTranslator,
     GroqTranslator,
-    MistralTranslator,
+    NvidiaTranslator,
     GoogleFreeTranslator,
     TranslationError,
     clean_model_output,
@@ -97,7 +97,7 @@ class TestTranslator(unittest.TestCase):
         self.assertEqual(res, "<think>Thinking...</think>Xin chào")
 
     @patch('translator.requests.Session')
-    def test_mistral_translator(self, mock_session_class):
+    def test_nvidia_translator(self, mock_session_class):
         mock_session = _mock_http_session(mock_session_class)
         mock_resp = MagicMock()
         mock_resp.status_code = 200
@@ -106,9 +106,17 @@ class TestTranslator(unittest.TestCase):
         }
         mock_session.post.return_value = mock_resp
 
-        t = MistralTranslator()
-        res = t.translate("Hello", "Vietnamese", "vi", api_key="test_key", model="mistral")
+        t = NvidiaTranslator()
+        res = t.translate(
+            "Hello",
+            "Vietnamese",
+            "vi",
+            api_key="test_key",
+            model="nvidia/nemotron-3.5-bolt-e4b",
+        )
         self.assertEqual(res, "Xin chào")
+        args, _ = mock_session.post.call_args
+        self.assertEqual(args[0], "https://integrate.api.nvidia.com/v1/chat/completions")
 
     @patch('translator.requests.Session')
     def test_google_free_translator(self, mock_session_class):

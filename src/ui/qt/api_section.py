@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import re
 import threading
+import time
 import webbrowser
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
@@ -21,11 +23,13 @@ from PySide6.QtWidgets import (
 )
 
 from constants import (
+    NVIDIA_DEFAULT_MODEL,
     PROVIDER_GEMINI,
     PROVIDER_GROQ,
-    PROVIDER_MISTRAL,
+    PROVIDER_NVIDIA,
     PROVIDER_GOOGLE_FREE,
 )
+from nvidia_models import list_nvidia_model_choices
 from ui.i18n import TRANSLATIONS
 from ui.qt.dispatch import run_on_main, schedule_ms
 from ui.qt.widgets import (
@@ -35,7 +39,8 @@ from ui.qt.widgets import (
     apply_control_height,
 )
 
-MISTRAL_MODEL_ALLOWLIST = ("codestral-latest", "ministral-8b-latest")
+API_TEST_WALL_TIMEOUT_SEC = 5.0
+API_TEST_HTTP_TIMEOUT_SEC = 5
 _LABEL_COL = 0
 _FIELD_COL = 1
 _FIELD_SPAN = 1
@@ -57,11 +62,20 @@ def _make_clear_icon(size: int = 16) -> QIcon:
 
 
 class ApiSection(QWidget):
-    def __init__(self, config, on_save_callback, get_current_lang, parent=None):
+    def __init__(
+        self,
+        config,
+        on_save_callback,
+        get_current_lang,
+        parent=None,
+        on_before_api_test=None,
+    ):
         super().__init__(parent)
         self.config = config
         self.on_save_callback = on_save_callback
         self.get_current_lang = get_current_lang
+        self.on_before_api_test = on_before_api_test
+        self._test_generation = 0
         self._panels: dict[str, QWidget] = {}
         self._model_combos: dict[str, QComboBox] = {}
         self._status_labels: dict[str, QLabel] = {}
@@ -91,7 +105,7 @@ class ApiSection(QWidget):
         for provider, link in (
             (PROVIDER_GEMINI, "https://aistudio.google.com/app/apikey"),
             (PROVIDER_GROQ, "https://console.groq.com/keys"),
-            (PROVIDER_MISTRAL, "https://admin.mistral.ai/organization/api-keys"),
+            (PROVIDER_NVIDIA, "https://build.nvidia.com/settings/api-keys"),
         ):
             self._panels[provider] = self._build_provider_panel(provider, link)
             self._stack.addWidget(self._panels[provider])
@@ -377,12 +391,8 @@ class ApiSection(QWidget):
                     )
                     if resp.status_code == 200:
                         models = [m["id"] for m in resp.json().get("data", []) if self._valid_model(provider, m["id"])]
-                elif provider == PROVIDER_MISTRAL:
-                    url = "https://api.mistral.ai/v1/models"
-                    resp = requests.get(url, headers={"Authorization": f"Bearer {api_key}"}, timeout=10)
-                    if resp.status_code == 200:
-                        available = {m["id"] for m in resp.json().get("data", [])}
-                        models = [mid for mid in MISTRAL_MODEL_ALLOWLIST if mid in available]
+                elif provider == PROVIDER_NVIDIA:
+                    models = list_nvidia_model_choices()
 
                 def done():
                     if not self._is_alive():
@@ -391,8 +401,8 @@ class ApiSection(QWidget):
                         combo.blockSignals(True)
                         combo.clear()
                         combo.addItems(models)
-                        pick = preserve if preserve in models else getattr(
-                            self.config, f"get_{provider}_model")()
+                        default_pick = getattr(self.config, f"get_{provider}_model")()
+                        pick = preserve if preserve in models else default_pick
                         if pick not in models:
                             pick = models[0]
                         combo.setCurrentText(pick)
@@ -418,9 +428,9 @@ class ApiSection(QWidget):
             "research", "antigravity", "lyria", "banana", "guard", "image",
             "vibe", "tiny", "small",
         ]
-        if provider == PROVIDER_MISTRAL:
-            blacklist.append("open")
-        whitelist = ["gemini", "gemma", "llama", "mistral", "mixtral", "qwen", "deepseek", "gpt"]
+        if provider == PROVIDER_NVIDIA:
+            return model_name == NVIDIA_DEFAULT_MODEL
+        whitelist = ["gemini", "gemma", "llama", "mistral", "mixtral", "qwen", "deepseek", "gpt", "nemotron", "nvidia"]
         clutter = ["preview", "experimental", "001", "002", "customtools"]
         if not any(wl in name_lower for wl in whitelist):
             return False
@@ -439,39 +449,82 @@ class ApiSection(QWidget):
         if not key:
             self._set_status(status, t_dict["save_empty"], "fail")
             return
+
+        self._test_generation += 1
+        run_id = self._test_generation
+        if self.on_before_api_test:
+            try:
+                self.on_before_api_test()
+            except Exception:
+                pass
+
         self._set_status(status, t_dict["test_running"], None)
         for b in (btn_fetch, btn_save, btn_test):
             b.setEnabled(False)
         combo.setEnabled(False)
 
         def _finish_ui(message: str, kind: str | None) -> None:
+            if run_id != self._test_generation:
+                return
             if not self._is_alive():
                 return
             self._set_status(status, message, kind)
             combo.setEnabled(True)
             for b in (btn_fetch, btn_save, btn_test):
                 b.setEnabled(True)
+            self._sync_toolbar_status_from(status)
 
-        def run_test():
-            from translator import GeminiTranslator, GroqTranslator, MistralTranslator
+        def _call_translate():
+            from translator import GeminiTranslator, GroqTranslator, NvidiaTranslator
 
             model = combo.currentText()
             if model in self._placeholder_combo_texts():
                 model = getattr(self.config, f"get_{provider}_model")()
+            t0 = time.perf_counter()
+            http_timeout = API_TEST_HTTP_TIMEOUT_SEC
+            common = dict(
+                api_key=key,
+                model=model,
+                http_timeout=http_timeout,
+            )
+            if provider == PROVIDER_GEMINI:
+                res = GeminiTranslator().translate(
+                    "Hi", "Vietnamese", "vi", **common
+                )
+            elif provider == PROVIDER_GROQ:
+                res = GroqTranslator().translate(
+                    "Hi", "Vietnamese", "vi", **common
+                )
+            elif provider == PROVIDER_NVIDIA:
+                res = NvidiaTranslator().translate(
+                    "Hi", "Vietnamese", "vi", **common
+                )
+            else:
+                raise RuntimeError(f"unsupported provider {provider}")
+            elapsed_ms = int((time.perf_counter() - t0) * 1000)
+            if not res:
+                raise RuntimeError("empty")
+            return res, elapsed_ms
+
+        def run_test():
             try:
-                res = None
-                if provider == PROVIDER_GEMINI:
-                    res = GeminiTranslator().translate("Hi", "Vietnamese", "vi", api_key=key, model=model)
-                elif provider == PROVIDER_GROQ:
-                    res = GroqTranslator().translate("Hi", "Vietnamese", "vi", api_key=key, model=model)
-                elif provider == PROVIDER_MISTRAL:
-                    res = MistralTranslator().translate("Hi", "Vietnamese", "vi", api_key=key, model=model)
-                if res:
-                    self.config.set_api_key(provider, key)
-                    run_on_main(lambda: _finish_ui(t_dict["test_pass"], "pass"))
-                else:
-                    raise RuntimeError("empty")
+                with ThreadPoolExecutor(max_workers=1) as pool:
+                    fut = pool.submit(_call_translate)
+                    _res, elapsed_ms = fut.result(timeout=API_TEST_WALL_TIMEOUT_SEC)
+                if run_id != self._test_generation:
+                    return
+                self.config.set_api_key(provider, key)
+                pass_msg = f"{t_dict['test_pass']} - {elapsed_ms}ms"
+                run_on_main(lambda: _finish_ui(pass_msg, "pass"))
+            except FuturesTimeout:
+                if run_id != self._test_generation:
+                    return
+                run_on_main(
+                    lambda: _finish_ui(t_dict.get("test_timeout", "Timeout"), "fail")
+                )
             except Exception as e:
+                if run_id != self._test_generation:
+                    return
                 err_msg = str(e)
                 short_err = t_dict["test_fail"]
                 if "429" in err_msg:
@@ -480,7 +533,9 @@ class ApiSection(QWidget):
                     short_err = f"{t_dict['test_fail']} (403)"
                 elif "400" in err_msg:
                     short_err = f"{t_dict['test_fail']} (400)"
-                elif "connection" in err_msg.lower() or "timeout" in err_msg.lower():
+                elif "timeout" in err_msg.lower():
+                    short_err = t_dict.get("test_timeout", "Timeout")
+                elif "connection" in err_msg.lower():
                     short_err = t_dict["net_error"]
                 run_on_main(lambda: _finish_ui(short_err, "fail"))
 

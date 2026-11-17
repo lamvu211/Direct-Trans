@@ -131,7 +131,7 @@ else:
 sys.path.insert(0, BASE_DIR)
 
 from config import Config
-from constants import MODE_POPUP, MODE_REPLACE
+from constants import MODE_POPUP, MODE_REPLACE, PROVIDERS_NEED_API_KEY
 from tray import TrayIcon
 from hotkey_manager import HotkeyManager
 from translator import TranslationManager
@@ -156,6 +156,109 @@ class DirectTransApp:
         self.translation_thread = None
         self._current_generation = 0
         self.config._theme_listener = self._on_ui_theme_changed
+
+    def cancel_ongoing_translations(self) -> None:
+        """Invalidate in-flight hotkey/popup translations (e.g. before API Test)."""
+        self._current_generation += 1
+        try:
+            from ui.qt.popup_window import QtPopupWindow
+
+            for popup in list(QtPopupWindow.open_popups):
+                try:
+                    popup.cancel_in_flight_work()
+                except Exception:
+                    logging.exception("Failed to cancel popup in-flight work")
+        except Exception:
+            pass
+
+    def _sync_settings_provider(self, provider_key: str) -> None:
+        settings = getattr(self, "settings_window", None)
+        if settings is not None and settings.is_open():
+            try:
+                settings.sync_provider(provider_key)
+            except Exception:
+                logging.exception("Failed to sync provider to Settings")
+
+    def _on_popup_provider_changed(self, popup, provider_key: str) -> None:
+        """User changed provider in translation popup — sync config and optionally retranslate."""
+        if not self.config or not popup:
+            return
+        if not isinstance(provider_key, str):
+            logging.warning("Ignored popup provider change with invalid key: %r", provider_key)
+            return
+
+        self._current_generation += 1
+        work_generation = self._current_generation
+
+        self.config.set_provider(provider_key)
+        self._sync_settings_provider(provider_key)
+        popup.sync_provider_from_config(provider_key)
+
+        if (
+            provider_key in PROVIDERS_NEED_API_KEY
+            and not self.config.get_api_key(provider_key)
+        ):
+            return
+
+        original = popup.original_text
+        if not original or not str(original).strip():
+            return
+
+        target_name = popup.target_lang_name or popup.target_lang_code or ""
+        target_code = popup.target_lang_code or ""
+        preserve_excel = bool(
+            popup.clipboard_hints and popup.clipboard_hints.get("excel")
+        )
+        token = popup.begin_retranslate()
+
+        def work():
+            from ui.i18n import TRANSLATIONS
+
+            ui_lang = self.config.data.get("ui_language", "vi")
+            msgs = TRANSLATIONS.get(ui_lang, TRANSLATIONS["en"])
+            try:
+                translation = self.translator.translate_with_provider(
+                    provider_key,
+                    original,
+                    target_name,
+                    target_code,
+                    preserve_excel_layout=preserve_excel,
+                )
+                translated = translation.text
+                if preserve_excel:
+                    translated = ClipboardUtil.coerce_excel_paste_text(
+                        translated, original
+                    )
+                else:
+                    translated = ClipboardUtil.align_translated_line_structure(
+                        original, translated
+                    )
+
+                def finish_ok():
+                    if work_generation != self._current_generation:
+                        return
+                    if not popup._is_alive():
+                        return
+                    popup.finish_retranslate(
+                        token,
+                        translated,
+                        translation.provider,
+                    )
+
+                self._run_on_main(finish_ok)
+            except Exception as e:
+                err = msgs.get("err_trans_title", "Lỗi dịch: {}").format(str(e))
+
+                def finish_err():
+                    if work_generation != self._current_generation:
+                        return
+                    if not popup._is_alive():
+                        return
+                    popup.finish_retranslate(token, None, provider_key, error_msg=err)
+
+                self._run_on_main(finish_err)
+
+        threading.Thread(target=work, daemon=True).start()
 
     def _on_ui_theme_changed(self, theme_id: str):
         """Keep Settings and any open translation popups in sync with config.ui_theme."""
@@ -344,6 +447,9 @@ class DirectTransApp:
     ):
         def show():
             p = PopupWindow(self.config)
+            p.set_provider_change_callback(
+                lambda popup, key: self._on_popup_provider_changed(popup, key)
+            )
             p.show(
                 translated_text=translated,
                 target_lang=target_lang_name,
@@ -411,6 +517,9 @@ class DirectTransApp:
 
             def create_popup():
                 p = PopupWindow(self.config)
+                p.set_provider_change_callback(
+                    lambda popup, key: self._on_popup_provider_changed(popup, key)
+                )
                 p.show(
                     loading=True,
                     target_lang=target_lang_name,
@@ -518,6 +627,9 @@ class DirectTransApp:
             except Exception:
                 def show_fallback():
                     p = PopupWindow(self.config)
+                    p.set_provider_change_callback(
+                        lambda popup, key: self._on_popup_provider_changed(popup, key)
+                    )
                     p.show(
                         translated_text=translated,
                         target_lang=target_lang_name,
@@ -549,25 +661,44 @@ class DirectTransApp:
         except Exception:
             logging.exception("Failed to close startup splash")
 
+    def _focus_settings_window(self) -> None:
+        if self.settings_window and self.settings_window.is_open():
+            self.settings_window.restore_and_focus()
+
     def _show_settings(self):
         """Open settings window."""
         if not self._gui_ready:
             return
 
         try:
+            # Close topmost Win32/Qt splash before focusing Settings (packaged exe).
+            self._dismiss_startup_splash()
+            qt_app = getattr(self, "qt_app", None)
+            if qt_app is not None:
+                qt_app.processEvents()
+
             # Reuse existing window (visible, minimized, or hidden to tray)
             if self.settings_window and self.settings_window.is_open():
                 logging.info("Settings window already exists. Restoring and focusing.")
-                self.settings_window.show()
+                self.settings_window.restore_and_focus()
+                if getattr(self, "_schedule_ms", None):
+                    self._schedule_ms(80, self._focus_settings_window)
                 return
 
             def on_settings_closed():
                 self.settings_window = None
 
             self.settings_window = SettingsWindow(
-                None, self.config, self._on_settings_saved, on_settings_closed, self.hotkey_manager
+                None,
+                self.config,
+                self._on_settings_saved,
+                on_settings_closed,
+                self.hotkey_manager,
+                on_before_api_test=self.cancel_ongoing_translations,
             )
             self.settings_window.show()
+            if getattr(self, "_schedule_ms", None):
+                self._schedule_ms(80, self._focus_settings_window)
             logging.info("Settings window opened.")
         except Exception as e:
             logging.exception("Failed to open settings window: %s", e)

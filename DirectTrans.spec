@@ -1,5 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
+
+sys.path.insert(0, "src")
+from constants import APP_VERSION  # noqa: E402
+
+_EXE_NAME = f"DirectTrans_v{APP_VERSION}"
 
 a = Analysis(
     ['src\\bootstrap.py'],
@@ -26,7 +32,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='DirectTrans_v2.0.15',
+    name=_EXE_NAME,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

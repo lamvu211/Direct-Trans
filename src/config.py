@@ -13,9 +13,12 @@ from constants import (
     DEFAULT_FALLBACK_ORDER,
     DEFAULT_PROVIDER,
     MODE_POPUP,
+    NVIDIA_DEFAULT_MODEL,
+    POPUP_WINDOW_MIN_HEIGHT,
+    POPUP_WINDOW_MIN_WIDTH,
     PROVIDER_GEMINI,
     PROVIDER_GROQ,
-    PROVIDER_MISTRAL,
+    PROVIDER_NVIDIA,
     PROVIDER_GOOGLE_FREE,
     PROVIDERS_NEED_API_KEY,
 )
@@ -27,13 +30,13 @@ class Config:
         "api_keys": {
             PROVIDER_GEMINI: "",
             PROVIDER_GROQ: "",
-            PROVIDER_MISTRAL: "",
+            PROVIDER_NVIDIA: "",
         },
         "fallback_enabled": True,
         "fallback_order": list(DEFAULT_FALLBACK_ORDER),
         "gemini_model": "gemini-flash-lite-latest",
         "groq_model": "openai/gpt-oss-120b",
-        "mistral_model": "codestral-latest",
+        "nvidia_model": NVIDIA_DEFAULT_MODEL,
         "auto_start": False,
         "ui_theme": "midnight_gold",
         "ui_language": "vi",
@@ -63,6 +66,7 @@ class Config:
         self._was_created = False
         self._theme_listener = None
         self.data = self._load()
+        self._migrate_legacy_providers()
         if getattr(sys, "frozen", False):
             self.reset_provider_models_to_defaults()
 
@@ -71,8 +75,54 @@ class Config:
         defaults = self.DEFAULT_CONFIG
         self.data["gemini_model"] = defaults["gemini_model"]
         self.data["groq_model"] = defaults["groq_model"]
-        self.data["mistral_model"] = defaults["mistral_model"]
+        self.data["nvidia_model"] = defaults["nvidia_model"]
         self.save()
+
+    def _migrate_legacy_providers(self) -> None:
+        """Migrate Mistral / OpenRouter settings to NVIDIA NIM (one-time on load)."""
+        changed = False
+        provider = self.data.get("translation_provider")
+        if provider in ("mistral", "openrouter"):
+            self.data["translation_provider"] = PROVIDER_NVIDIA
+            changed = True
+
+        order = self.data.get("fallback_order")
+        if isinstance(order, list):
+            new_order = []
+            order_changed = False
+            for p in order:
+                if p in ("mistral", "openrouter"):
+                    if PROVIDER_NVIDIA not in new_order:
+                        new_order.append(PROVIDER_NVIDIA)
+                    order_changed = True
+                elif p not in new_order:
+                    new_order.append(p)
+            if order_changed:
+                self.data["fallback_order"] = new_order
+                changed = True
+
+        keys = self.data.setdefault("api_keys", {})
+        for legacy in ("mistral", "openrouter"):
+            if legacy in keys:
+                if not keys.get(PROVIDER_NVIDIA):
+                    keys[PROVIDER_NVIDIA] = keys.get(legacy, "")
+                keys.pop(legacy, None)
+                changed = True
+
+        if "mistral_model" in self.data:
+            self.data.pop("mistral_model", None)
+            changed = True
+        if "openrouter_model" in self.data:
+            if not self.data.get("nvidia_model"):
+                self.data["nvidia_model"] = NVIDIA_DEFAULT_MODEL
+            self.data.pop("openrouter_model", None)
+            changed = True
+        elif not self.data.get("nvidia_model"):
+            self.data["nvidia_model"] = NVIDIA_DEFAULT_MODEL
+            changed = True
+
+        if changed:
+            self.save()
 
     def _resolve_config_path(self) -> str:
         if getattr(sys, 'frozen', False):
@@ -205,13 +255,13 @@ class Config:
             h = int(raw.get("height"))
         except (TypeError, ValueError):
             return None
-        if w < 690 or h < 468:
+        if w < POPUP_WINDOW_MIN_WIDTH or h < POPUP_WINDOW_MIN_HEIGHT:
             return None
         return {"width": w, "height": h}
 
     def set_popup_window_size(self, width: int, height: int) -> None:
-        w = max(690, int(width))
-        h = max(468, int(height))
+        w = max(POPUP_WINDOW_MIN_WIDTH, int(width))
+        h = max(POPUP_WINDOW_MIN_HEIGHT, int(height))
         self.data["popup_window_size"] = {"width": w, "height": h}
         self.save()
 
@@ -248,11 +298,11 @@ class Config:
         self.data['groq_model'] = model
         self.save()
 
-    def get_mistral_model(self) -> str:
-        return self.data.get('mistral_model', 'codestral-latest')
+    def get_nvidia_model(self) -> str:
+        return self.data.get("nvidia_model", NVIDIA_DEFAULT_MODEL)
 
-    def set_mistral_model(self, model: str):
-        self.data['mistral_model'] = model
+    def set_nvidia_model(self, model: str):
+        self.data["nvidia_model"] = model
         self.save()
 
     def is_first_run(self) -> bool:

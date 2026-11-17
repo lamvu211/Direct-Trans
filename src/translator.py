@@ -1,5 +1,5 @@
 """
-translator.py - Translation backends (Gemini, Groq, Mistral, Google Free) with fallback chain.
+translator.py - Translation backends (Gemini, Groq, NVIDIA NIM, Google Free) with fallback chain.
 """
 
 import re
@@ -15,10 +15,13 @@ from constants import (
     DEFAULT_FALLBACK_ORDER,
     PROVIDER_GEMINI,
     PROVIDER_GROQ,
-    PROVIDER_MISTRAL,
+    PROVIDER_NVIDIA,
+    NVIDIA_DEFAULT_MODEL,
+    NVIDIA_CHAT_COMPLETIONS_URL,
     PROVIDER_GOOGLE_FREE,
     PROVIDERS_NEED_API_KEY,
 )
+from ui.i18n import provider_display_name
 
 
 class TranslationError(Exception):
@@ -179,8 +182,24 @@ class BaseHTTPTranslator(TranslationBackend):
     def _reset_session(self) -> None:
         self.close()
 
+    @staticmethod
+    def _http_timeout(kwargs: dict) -> float:
+        raw = kwargs.get("http_timeout", 12)
+        try:
+            return max(0.5, float(raw))
+        except (TypeError, ValueError):
+            return 12.0
+
     def _make_request_with_retry(
-        self, url, headers, json_payload=None, form_data=None, params=None, method="post"
+        self,
+        url,
+        headers,
+        json_payload=None,
+        form_data=None,
+        params=None,
+        method="post",
+        *,
+        timeout: float = 12,
     ):
         max_retries = 1
         retry_delay = 1.0
@@ -191,14 +210,14 @@ class BaseHTTPTranslator(TranslationBackend):
                 if method == "post":
                     if form_data is not None:
                         resp = session.post(
-                            url, headers=headers, data=form_data, params=params, timeout=12
+                            url, headers=headers, data=form_data, params=params, timeout=timeout
                         )
                     else:
                         resp = session.post(
-                            url, headers=headers, json=json_payload, params=params, timeout=12
+                            url, headers=headers, json=json_payload, params=params, timeout=timeout
                         )
                 else:
-                    resp = session.get(url, headers=headers, params=params, timeout=12)
+                    resp = session.get(url, headers=headers, params=params, timeout=timeout)
                 resp.raise_for_status()
                 return resp.json()
             except requests.exceptions.HTTPError as e:
@@ -295,6 +314,7 @@ class GeminiTranslator(BaseHTTPTranslator):
                     "x-goog-api-key": api_key,
                 },
                 json_payload=payload,
+                timeout=self._http_timeout(kwargs),
             )
             return _extract_gemini_text(data)
         except TranslationError:
@@ -328,7 +348,12 @@ class GroqTranslator(BaseHTTPTranslator):
         }
 
         try:
-            data = self._make_request_with_retry(url=url, headers=headers, json_payload=payload)
+            data = self._make_request_with_retry(
+                url=url,
+                headers=headers,
+                json_payload=payload,
+                timeout=self._http_timeout(kwargs),
+            )
             return _extract_chat_completion_text(data, "Groq")
         except TranslationError:
             raise
@@ -336,17 +361,16 @@ class GroqTranslator(BaseHTTPTranslator):
             raise TranslationError(f"Unexpected Groq response format: {e}")
 
 
-class MistralTranslator(BaseHTTPTranslator):
+class NvidiaTranslator(BaseHTTPTranslator):
     def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
-        api_key = kwargs.get('api_key', '')
-        model = kwargs.get('model', 'codestral-latest')
+        api_key = kwargs.get("api_key", "")
+        model = kwargs.get("model", NVIDIA_DEFAULT_MODEL)
         if not api_key:
-            raise TranslationError("Mistral API key not configured")
+            raise TranslationError("NVIDIA NIM API key not configured")
 
-        url = "https://api.mistral.ai/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
         system = _system_prompt(
             target_lang_name, kwargs.get("preserve_excel_layout", False)
@@ -355,18 +379,23 @@ class MistralTranslator(BaseHTTPTranslator):
             "model": model,
             "messages": [
                 {"role": "system", "content": system},
-                {"role": "user", "content": f"<text>\n{text}\n</text>"}
+                {"role": "user", "content": f"<text>\n{text}\n</text>"},
             ],
-            "temperature": 0.3
+            "temperature": 0.3,
         }
 
         try:
-            data = self._make_request_with_retry(url=url, headers=headers, json_payload=payload)
-            return _extract_chat_completion_text(data, "Mistral")
+            data = self._make_request_with_retry(
+                url=NVIDIA_CHAT_COMPLETIONS_URL,
+                headers=headers,
+                json_payload=payload,
+                timeout=self._http_timeout(kwargs),
+            )
+            return _extract_chat_completion_text(data, "NVIDIA NIM")
         except TranslationError:
             raise
         except (KeyError, IndexError, TypeError) as e:
-            raise TranslationError(f"Unexpected Mistral response format: {e}")
+            raise TranslationError(f"Unexpected NVIDIA NIM response format: {e}")
 
 
 class GoogleFreeTranslator(BaseHTTPTranslator):
@@ -454,7 +483,7 @@ class TranslationManager:
         self.backends = {
             PROVIDER_GEMINI: GeminiTranslator(),
             PROVIDER_GROQ: GroqTranslator(),
-            PROVIDER_MISTRAL: MistralTranslator(),
+            PROVIDER_NVIDIA: NvidiaTranslator(),
             PROVIDER_GOOGLE_FREE: GoogleFreeTranslator(),
         }
 
@@ -498,9 +527,9 @@ class TranslationManager:
                 elif provider == PROVIDER_GROQ:
                     kwargs['api_key'] = self.config.get_api_key(PROVIDER_GROQ)
                     kwargs['model'] = self.config.get_groq_model()
-                elif provider == PROVIDER_MISTRAL:
-                    kwargs['api_key'] = self.config.get_api_key(PROVIDER_MISTRAL)
-                    kwargs['model'] = self.config.get_mistral_model()
+                elif provider == PROVIDER_NVIDIA:
+                    kwargs["api_key"] = self.config.get_api_key(PROVIDER_NVIDIA)
+                    kwargs["model"] = self.config.get_nvidia_model()
 
                 kwargs["preserve_excel_layout"] = preserve_excel_layout
                 result = backend.translate(text, target_lang_name, target_lang_code, **kwargs)
@@ -514,6 +543,38 @@ class TranslationManager:
                 continue
 
         raise TranslationError(f"All translation providers failed. Last error: {last_error}")
+
+    def translate_with_provider(
+        self,
+        provider: str,
+        text: str,
+        target_lang_name: str,
+        target_lang_code: str,
+        *,
+        preserve_excel_layout: bool = False,
+    ) -> TranslationResult:
+        """Translate using a single provider (no fallback chain)."""
+        backend = self.backends.get(provider)
+        if not backend:
+            raise TranslationError(f"Unknown provider: {provider}")
+
+        if provider in PROVIDERS_NEED_API_KEY and not self.config.get_api_key(provider):
+            raise TranslationError(f"{provider_display_name(provider)} API key not configured")
+
+        kwargs: dict = {"preserve_excel_layout": preserve_excel_layout}
+        if provider == PROVIDER_GEMINI:
+            kwargs["api_key"] = self.config.get_api_key(PROVIDER_GEMINI)
+            kwargs["model"] = self.config.get_gemini_model()
+        elif provider == PROVIDER_GROQ:
+            kwargs["api_key"] = self.config.get_api_key(PROVIDER_GROQ)
+            kwargs["model"] = self.config.get_groq_model()
+        elif provider == PROVIDER_NVIDIA:
+            kwargs["api_key"] = self.config.get_api_key(PROVIDER_NVIDIA)
+            kwargs["model"] = self.config.get_nvidia_model()
+
+        result = backend.translate(text, target_lang_name, target_lang_code, **kwargs)
+        result = clean_model_output(result)
+        return TranslationResult(text=result, provider=provider)
 
     def close(self) -> None:
         for backend in self.backends.values():

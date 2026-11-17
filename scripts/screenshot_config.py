@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 
 from config import Config
-from constants import MODE_POPUP, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_MISTRAL
+from constants import MODE_POPUP, PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_NVIDIA
 
 
 def make_public_screenshot_config() -> Config:
@@ -17,7 +17,7 @@ def make_public_screenshot_config() -> Config:
     config.data["api_keys"] = {
         PROVIDER_GEMINI: "",
         PROVIDER_GROQ: "",
-        PROVIDER_MISTRAL: "",
+        PROVIDER_NVIDIA: "",
     }
     config.data["hotkeys"] = [
         {

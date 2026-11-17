@@ -20,7 +20,7 @@ Windows background app (system tray): select text in any application, press a gl
 
 ### Settings
 
-Single screen: **UI language** (Vietnamese, English, Korean, Chinese, Japanese), **theme** picker, translation provider (Gemini / Groq / Mistral / Google Free), API key and model, hotkeys, Windows startup, update check, User manual, and Feedback.
+Single screen: **UI language** (Vietnamese, English, Korean, Chinese, Japanese), **theme** picker, translation provider (Gemini / Groq / NVIDIA NIM / Google Free), API key and model, hotkeys, Windows startup, update check, User manual, and Feedback.
 
 **Themes (four options):** Midnight Gold (dark gold), Aurora Glass (dark glass), Rose Champagne (light rose), and **Nord Snow** (light frost / Nord-inspired palette with blue accent). Theme applies to Settings and the translation popup.
 
@@ -91,7 +91,7 @@ direct-trans/
 │   ├── main.py              # App logic; use `python src/main.py` in dev
 │   ├── win32_startup_splash.py
 │   ├── config.py            # config.json, API keys (DPAPI)
-│   ├── translator.py        # Gemini, Groq, Mistral, Google Free
+│   ├── translator.py        # Gemini, Groq, NVIDIA NIM, Google Free
 │   ├── hotkey_manager.py    # RegisterHotKey (Windows)
 │   ├── clipboard_util.py    # Copy / replace RTF
 │   ├── process_util.py      # Kill stale DirectTrans processes

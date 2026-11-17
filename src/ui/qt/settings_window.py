@@ -44,12 +44,20 @@ from ui.qt.widgets import (
 class QtSettingsWindow(QWidget):
     """Production settings UI — responsive scrollable layout, theme dropdown."""
 
-    def __init__(self, config, on_save_callback, on_close_callback=None, hotkey_manager=None):
+    def __init__(
+        self,
+        config,
+        on_save_callback,
+        on_close_callback=None,
+        hotkey_manager=None,
+        on_before_api_test=None,
+    ):
         super().__init__()
         self.config = config
         self.on_save_callback = on_save_callback
         self.on_close_callback = on_close_callback
         self.hotkey_manager = hotkey_manager
+        self.on_before_api_test = on_before_api_test
         self.current_lang = self.config.data.get("ui_language", "vi")
 
         self.setObjectName("root")
@@ -223,7 +231,10 @@ class QtSettingsWindow(QWidget):
         lay.addWidget(prov_card)
 
         self.api_section = ApiSection(
-            self.config, self.on_save_callback, lambda: self.current_lang
+            self.config,
+            self.on_save_callback,
+            lambda: self.current_lang,
+            on_before_api_test=self.on_before_api_test,
         )
         api_card, api_body = card(
             t0["api_section"].upper(),
@@ -298,8 +309,32 @@ class QtSettingsWindow(QWidget):
         self.config.data["translation_provider"] = key
         self.config.save()
         self.api_section.set_provider(key)
+        self._sync_open_popups_provider(key)
         if self.on_save_callback:
             self.on_save_callback()
+
+    def sync_provider_from_config(self, provider_key: str) -> None:
+        """Refresh provider combo when changed from the translation popup."""
+        name = self._provider_rev.get(provider_key)
+        if not name:
+            return
+        if self._provider_combo.currentText() != name:
+            self._provider_combo.blockSignals(True)
+            self._provider_combo.setCurrentText(name)
+            self._provider_combo.blockSignals(False)
+        self.api_section.set_provider(provider_key)
+
+    def _sync_open_popups_provider(self, provider_key: str) -> None:
+        try:
+            from ui.qt.popup_window import QtPopupWindow
+
+            for popup in list(QtPopupWindow.open_popups):
+                try:
+                    popup.sync_provider_from_config(provider_key)
+                except Exception:
+                    logging.exception("Failed to sync provider to popup")
+        except Exception:
+            pass
 
     def _on_autostart(self, checked: bool):
         if not self.config.set_auto_start(checked):
@@ -403,8 +438,15 @@ class QtSettingsWindow(QWidget):
 
     def restore_and_focus(self):
         self.showNormal()
+        self.show()
         self.raise_()
         self.activateWindow()
+        try:
+            from win32_foreground import bring_qt_widget_to_foreground
+
+            bring_qt_widget_to_foreground(self)
+        except Exception:
+            pass
 
     def changeEvent(self, event):
         if event.type() == event.Type.WindowStateChange and self.isMinimized():

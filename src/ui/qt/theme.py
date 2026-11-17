@@ -41,8 +41,14 @@ QLabel#apiStatus {
     font-weight: 700;
     font-size: 8.5pt;
 }
-QLabel#apiStatus[statusKind="pass"] { color: #22c55e; }
+QLabel#apiStatus[statusKind="pass"] { color: #3b82f6; }
 QLabel#apiStatus[statusKind="fail"] { color: #ef4444; }
+QLabel#providerNotice {
+    font-size: 8.5pt;
+    font-weight: 600;
+    color: #ef4444;
+    padding: 0 12px 6px 12px;
+}
 QLineEdit#line, QTextEdit#line {
     padding: 4px 8px;
     border-radius: 6px;

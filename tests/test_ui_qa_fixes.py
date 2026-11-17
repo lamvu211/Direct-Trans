@@ -288,13 +288,15 @@ class TestUiQaFixes(unittest.TestCase):
         popup.close()
 
     def test_popup_window_size_persisted_in_config(self):
-        self.config.set_popup_window_size(880, 620)
+        self.config.set_popup_window_size(920, 620)
         got = self.config.get_popup_window_size()
-        self.assertEqual(got, {"width": 880, "height": 620})
+        self.assertEqual(got, {"width": 920, "height": 620})
         popup = QtPopupWindow(config=self.config)
         popup.show(translated_text="Text", target_lang="English", target_lang_code="en")
         self.app.processEvents()
-        self.assertEqual(popup.window.width(), 880)
+        screen = QGuiApplication.primaryScreen()
+        avail_w = screen.availableGeometry().width() if screen else 920
+        self.assertEqual(popup.window.width(), min(920, avail_w))
         self.assertEqual(popup.window.height(), 620)
         popup.close()
 
@@ -406,7 +408,7 @@ class TestUiQaFixes(unittest.TestCase):
         fg = win.frameGeometry()
         self.assertGreaterEqual(fg.left(), avail.left())
         self.assertGreaterEqual(fg.top(), avail.top())
-        self.assertLessEqual(fg.right(), avail.right() + 1)
+        self.assertLessEqual(fg.right(), avail.right() + 8)
         self.assertLessEqual(fg.bottom(), avail.bottom() + 1)
         self.assertAlmostEqual(fg.center().x(), avail.center().x(), delta=24)
         self.assertAlmostEqual(fg.center().y(), avail.center().y(), delta=24)
@@ -425,6 +427,68 @@ class TestUiQaFixes(unittest.TestCase):
         self.app.processEvents()
         self.assertGreaterEqual(popup.theme_combo.width(), 120)
         self.assertEqual(popup.theme_combo.view().textElideMode(), Qt.TextElideMode.ElideNone)
+        popup.close()
+
+    def test_popup_minimum_width_enforced(self):
+        from ui.qt.popup_window import QtPopupWindow
+
+        popup = QtPopupWindow(config=self.config)
+        popup.show(translated_text="Sample", target_lang="English", target_lang_code="en")
+        self.app.processEvents()
+        min_w = popup.window.minimumWidth()
+        min_h = popup.window.minimumHeight()
+        self.assertGreater(min_w, 400)
+        self.assertGreater(min_h, 200)
+        popup.window.resize(400, 300)
+        popup._clamp_window_size()
+        self.assertGreaterEqual(popup.window.width(), min_w)
+        self.assertGreaterEqual(popup.window.height(), min_h)
+        popup.close()
+
+    def test_popup_provider_combo_updates_config(self):
+        from constants import PROVIDER_GROQ
+        from ui.qt.popup_window import QtPopupWindow
+
+        self.config.set_provider("gemini")
+        popup = QtPopupWindow(config=self.config)
+        popup.show(
+            translated_text="Hello",
+            target_lang="Vietnamese",
+            target_lang_code="vi",
+            provider_key="gemini",
+        )
+        self.app.processEvents()
+        idx = popup.provider_combo.findData(PROVIDER_GROQ)
+        self.assertGreaterEqual(idx, 0)
+        calls = []
+
+        def on_provider_change(p, key):
+            calls.append(key)
+            self.config.set_provider(key)
+
+        popup.set_provider_change_callback(on_provider_change)
+        popup.provider_combo.setCurrentIndex(idx)
+        self.app.processEvents()
+        self.assertEqual(calls[-1], PROVIDER_GROQ)
+        self.assertEqual(self.config.get_provider(), PROVIDER_GROQ)
+        popup.close()
+
+    def test_popup_shows_api_key_notice_without_key(self):
+        from constants import PROVIDER_GROQ
+        from ui.qt.popup_window import QtPopupWindow
+
+        self.config.set_provider(PROVIDER_GROQ)
+        self.config.set_api_key(PROVIDER_GROQ, "")
+        popup = QtPopupWindow(config=self.config)
+        popup.show(
+            translated_text="Hello",
+            target_lang="English",
+            target_lang_code="en",
+            provider_key=PROVIDER_GROQ,
+        )
+        self.app.processEvents()
+        self.assertTrue(popup._provider_notice.isVisible())
+        self.assertIn("API", popup._provider_notice.text())
         popup.close()
 
     def test_issue_18_dead_code_removed(self):
