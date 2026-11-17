@@ -1,5 +1,12 @@
 # Changelog
 
+## v2.0.18
+- **Translation**: Removed cross-provider fallback (`fallback_enabled` / `fallback_order` dropped from `config.json` on load). One selected provider per request; failures show localized messages (HTTP codes, timeout, network) via `translation_errors.py`.
+- **Translation**: No HTTP retries on 429/503/network; 12s request timeout. Gemini default model **`gemini-3.1-flash-lite`**, `temperature` 0.2, thinking budget 0.
+- **Popup**: Provider dropdown disabled while loading; enabled after a result or error.
+- **Startup**: Manual packaged launch resets model names to defaults; **Start with Windows** uses `--windows-autostart` and keeps user model choices.
+- **Build**: `APP_VERSION` **2.0.18**; artifact **`DirectTrans_v2.0.18.exe`**.
+
 ## v2.0.17
 - **Providers**: Replaced **OpenRouter** with **NVIDIA NIM** (`POST https://integrate.api.nvidia.com/v1/chat/completions`). Default model **`nvidia/nemotron-3.5-bolt-e4b`**; **Load Models** uses a fixed list (no catalog API). OpenRouter/Mistral keys and fallback slot migrate to NVIDIA in `config.json`.
 - **Build**: `APP_VERSION` **2.0.17**; artifact **`DirectTrans_v2.0.17.exe`**.

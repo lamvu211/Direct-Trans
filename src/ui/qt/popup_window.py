@@ -1013,6 +1013,9 @@ class QtPopupWindow:
     def _on_provider_combo_changed(self, _index: int) -> None:
         if not self.provider_combo:
             return
+        if self._state == STATE_LOADING:
+            self.sync_provider_from_config(self.provider_key)
+            return
         key = self.provider_combo.currentData()
         if not key or key == self.provider_key:
             return
@@ -1142,6 +1145,9 @@ class QtPopupWindow:
             self.copy_btn.setEnabled(can_copy)
         if self.replace_btn:
             self.replace_btn.setEnabled(can_replace)
+        if self.provider_combo:
+            can_change_provider = self._state in (STATE_READY, STATE_ERROR)
+            self.provider_combo.setEnabled(can_change_provider)
 
     def update_text(self, translated_text: str, provider_key: str = None):
         self.translated_text = translated_text
@@ -1159,6 +1165,7 @@ class QtPopupWindow:
         self.translated_text = None
         self._error_message = error_msg
         self._state = STATE_ERROR
+        self._sync_action_buttons()
         if not self.text_widget or not self.window:
             return
         self.text_widget.setPlainText(f"❌ {error_msg}")

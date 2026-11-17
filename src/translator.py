@@ -1,18 +1,17 @@
 """
-translator.py - Translation backends (Gemini, Groq, NVIDIA NIM, Google Free) with fallback chain.
+translator.py - Translation backends (Gemini, Groq, NVIDIA NIM, Google Free).
 """
 
 import re
 import requests
 import logging
-import time
 import urllib3.util
 from requests.adapters import HTTPAdapter
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 from constants import (
-    DEFAULT_FALLBACK_ORDER,
+    DEFAULT_GEMINI_MODEL,
     PROVIDER_GEMINI,
     PROVIDER_GROQ,
     PROVIDER_NVIDIA,
@@ -25,7 +24,39 @@ from ui.i18n import provider_display_name
 
 
 class TranslationError(Exception):
-    pass
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
+
+
+_NON_RETRIABLE_CODES = frozenset({
+    "TIMEOUT",
+    "NETWORK",
+    "HTTP_400",
+    "HTTP_401",
+    "HTTP_403",
+    "HTTP_429",
+    "HTTP_500",
+    "HTTP_503",
+    "HTTP_OTHER",
+    "BLOCKED",
+})
+
+
+def _http_error_code(status_code: int) -> str:
+    if status_code == 400:
+        return "HTTP_400"
+    if status_code == 401:
+        return "HTTP_401"
+    if status_code == 403:
+        return "HTTP_403"
+    if status_code == 429:
+        return "HTTP_429"
+    if status_code == 500:
+        return "HTTP_500"
+    if status_code == 503:
+        return "HTTP_503"
+    return "HTTP_OTHER"
 
 
 _SENSITIVE_URL_RE = re.compile(r"([?&]key=)[^&\s\"']+", re.IGNORECASE)
@@ -93,13 +124,15 @@ def _extract_gemini_text(data: dict) -> str:
     if block_reason:
         raise TranslationError(
             "Gemini refused this text (content may not be allowed). "
-            "Try a shorter selection or another provider."
+            "Try a shorter selection or another provider.",
+            code="BLOCKED",
         )
 
     candidates = data.get("candidates") or []
     if not candidates:
         raise TranslationError(
-            "Gemini did not return a translation (empty or blocked response)."
+            "Gemini did not return a translation (empty or blocked response).",
+            code="BLOCKED",
         )
 
     candidate = candidates[0]
@@ -107,7 +140,8 @@ def _extract_gemini_text(data: dict) -> str:
     if finish in ("SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT"):
         raise TranslationError(
             f"Gemini could not translate this text (blocked: {finish}). "
-            "Try different wording or another provider."
+            "Try different wording or another provider.",
+            code="BLOCKED",
         )
 
     content = candidate.get("content") or {}
@@ -131,7 +165,8 @@ def _extract_chat_completion_text(data: dict, provider_label: str) -> str:
     finish = (choice.get("finish_reason") or "").lower()
     if finish == "content_filter":
         raise TranslationError(
-            f"{provider_label} blocked this text. Try different wording or another provider."
+            f"{provider_label} blocked this text. Try different wording or another provider.",
+            code="BLOCKED",
         )
 
     message = choice.get("message") or {}
@@ -201,45 +236,36 @@ class BaseHTTPTranslator(TranslationBackend):
         *,
         timeout: float = 12,
     ):
-        max_retries = 1
-        retry_delay = 1.0
-
-        for attempt in range(max_retries):
-            try:
-                session = self._get_session()
-                if method == "post":
-                    if form_data is not None:
-                        resp = session.post(
-                            url, headers=headers, data=form_data, params=params, timeout=timeout
-                        )
-                    else:
-                        resp = session.post(
-                            url, headers=headers, json=json_payload, params=params, timeout=timeout
-                        )
+        try:
+            session = self._get_session()
+            if method == "post":
+                if form_data is not None:
+                    resp = session.post(
+                        url, headers=headers, data=form_data, params=params, timeout=timeout
+                    )
                 else:
-                    resp = session.get(url, headers=headers, params=params, timeout=timeout)
-                resp.raise_for_status()
-                return resp.json()
-            except requests.exceptions.HTTPError as e:
-                status_code = e.response.status_code if e.response is not None else 0
-                if status_code in (429, 503) and attempt < max_retries - 1:
-                    logging.warning(f"API returned {status_code}. Retrying in {retry_delay}s... (Attempt {attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-                raise TranslationError(_sanitize_error_message(f"API error: {e}"))
-            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
-                self._reset_session()
-                if attempt < max_retries - 1:
-                    logging.warning(f"Network error ({e}). Retrying in {retry_delay}s... (Attempt {attempt + 1}/{max_retries})")
-                    time.sleep(retry_delay)
-                    retry_delay *= 2
-                    continue
-                raise TranslationError(_sanitize_error_message(f"Network error: {e}"))
-            except ValueError as e:
-                raise TranslationError(f"Invalid response (not JSON): {e}")
-            except Exception as e:
-                raise TranslationError(_sanitize_error_message(f"Request failed: {e}"))
+                    resp = session.post(
+                        url, headers=headers, json=json_payload, params=params, timeout=timeout
+                    )
+            else:
+                resp = session.get(url, headers=headers, params=params, timeout=timeout)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else 0
+            raise TranslationError(
+                _sanitize_error_message(f"API error ({status_code}): {e}"),
+                code=_http_error_code(status_code),
+            )
+        except requests.exceptions.Timeout as e:
+            raise TranslationError(_sanitize_error_message(f"Timeout: {e}"), code="TIMEOUT")
+        except requests.exceptions.ConnectionError as e:
+            self._reset_session()
+            raise TranslationError(_sanitize_error_message(f"Network error: {e}"), code="NETWORK")
+        except ValueError as e:
+            raise TranslationError(f"Invalid response (not JSON): {e}", code="PARSE")
+        except Exception as e:
+            raise TranslationError(_sanitize_error_message(f"Request failed: {e}"))
 
 
 SYSTEM_PROMPT = """You are a highly capable, professional translator and language editor. Translate the text enclosed in <text> tags into {target_lang}.
@@ -285,9 +311,9 @@ def _system_prompt(target_lang_name: str, preserve_excel_layout: bool = False) -
 class GeminiTranslator(BaseHTTPTranslator):
     def translate(self, text: str, target_lang_name: str, target_lang_code: str, **kwargs) -> str:
         api_key = kwargs.get('api_key', '')
-        model = kwargs.get('model', 'gemini-flash-lite-latest')
+        model = kwargs.get('model', DEFAULT_GEMINI_MODEL)
         if not api_key:
-            raise TranslationError("Gemini API key not configured")
+            raise TranslationError("Gemini API key not configured", code="NO_API_KEY")
         
         api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
@@ -302,7 +328,8 @@ class GeminiTranslator(BaseHTTPTranslator):
                 "parts": [{"text": f"<text>\n{text}\n</text>"}]
             }],
             "generationConfig": {
-                "temperature": 0.3,
+                "temperature": 0.2,
+                "thinkingConfig": {"thinkingBudget": 0},
             },
         }
 
@@ -320,7 +347,7 @@ class GeminiTranslator(BaseHTTPTranslator):
         except TranslationError:
             raise
         except (KeyError, IndexError, TypeError) as e:
-            raise TranslationError(f"Unexpected Gemini response format: {e}")
+            raise TranslationError(f"Unexpected Gemini response format: {e}", code="PARSE")
 
 
 class GroqTranslator(BaseHTTPTranslator):
@@ -328,7 +355,7 @@ class GroqTranslator(BaseHTTPTranslator):
         api_key = kwargs.get('api_key', '')
         model = kwargs.get('model', 'openai/gpt-oss-120b')
         if not api_key:
-            raise TranslationError("Groq API key not configured")
+            raise TranslationError("Groq API key not configured", code="NO_API_KEY")
 
         url = "https://api.groq.com/openai/v1/chat/completions"
         headers = {
@@ -345,6 +372,7 @@ class GroqTranslator(BaseHTTPTranslator):
                 {"role": "user", "content": f"<text>\n{text}\n</text>"}
             ],
             "temperature": 0.3,
+            "reasoning_effort": "low",
         }
 
         try:
@@ -358,7 +386,7 @@ class GroqTranslator(BaseHTTPTranslator):
         except TranslationError:
             raise
         except (KeyError, IndexError, TypeError) as e:
-            raise TranslationError(f"Unexpected Groq response format: {e}")
+            raise TranslationError(f"Unexpected Groq response format: {e}", code="PARSE")
 
 
 class NvidiaTranslator(BaseHTTPTranslator):
@@ -366,7 +394,7 @@ class NvidiaTranslator(BaseHTTPTranslator):
         api_key = kwargs.get("api_key", "")
         model = kwargs.get("model", NVIDIA_DEFAULT_MODEL)
         if not api_key:
-            raise TranslationError("NVIDIA NIM API key not configured")
+            raise TranslationError("NVIDIA NIM API key not configured", code="NO_API_KEY")
 
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -382,6 +410,7 @@ class NvidiaTranslator(BaseHTTPTranslator):
                 {"role": "user", "content": f"<text>\n{text}\n</text>"},
             ],
             "temperature": 0.3,
+            "reasoning_effort": "low",
         }
 
         try:
@@ -395,7 +424,7 @@ class NvidiaTranslator(BaseHTTPTranslator):
         except TranslationError:
             raise
         except (KeyError, IndexError, TypeError) as e:
-            raise TranslationError(f"Unexpected NVIDIA NIM response format: {e}")
+            raise TranslationError(f"Unexpected NVIDIA NIM response format: {e}", code="PARSE")
 
 
 class GoogleFreeTranslator(BaseHTTPTranslator):
@@ -448,6 +477,8 @@ class GoogleFreeTranslator(BaseHTTPTranslator):
             except TranslationError as e:
                 last_error = e
                 logging.warning("Google Free client '%s' failed: %s", client, e)
+                if getattr(e, "code", None) in _NON_RETRIABLE_CODES:
+                    raise
                 continue
             except (ValueError, TypeError, IndexError) as e:
                 last_error = TranslationError(f"Google Translate parse error: {e}")
@@ -476,7 +507,7 @@ class GoogleFreeTranslator(BaseHTTPTranslator):
 
 
 class TranslationManager:
-    """Orchestrates translation with fallback chain."""
+    """Orchestrates translation for the user-selected provider only."""
 
     def __init__(self, config):
         self.config = config
@@ -487,6 +518,43 @@ class TranslationManager:
             PROVIDER_GOOGLE_FREE: GoogleFreeTranslator(),
         }
 
+    def _kwargs_for_provider(self, provider: str, preserve_excel_layout: bool) -> dict:
+        kwargs: dict = {"preserve_excel_layout": preserve_excel_layout}
+        if provider == PROVIDER_GEMINI:
+            kwargs["api_key"] = self.config.get_api_key(PROVIDER_GEMINI)
+            kwargs["model"] = self.config.get_gemini_model()
+        elif provider == PROVIDER_GROQ:
+            kwargs["api_key"] = self.config.get_api_key(PROVIDER_GROQ)
+            kwargs["model"] = self.config.get_groq_model()
+        elif provider == PROVIDER_NVIDIA:
+            kwargs["api_key"] = self.config.get_api_key(PROVIDER_NVIDIA)
+            kwargs["model"] = self.config.get_nvidia_model()
+        return kwargs
+
+    def _run_provider(
+        self,
+        provider: str,
+        text: str,
+        target_lang_name: str,
+        target_lang_code: str,
+        *,
+        preserve_excel_layout: bool = False,
+    ) -> TranslationResult:
+        backend = self.backends.get(provider)
+        if not backend:
+            raise TranslationError(f"Unknown provider: {provider}")
+
+        if provider in PROVIDERS_NEED_API_KEY and not self.config.get_api_key(provider):
+            raise TranslationError(
+                f"{provider_display_name(provider)} API key not configured",
+                code="NO_API_KEY",
+            )
+
+        kwargs = self._kwargs_for_provider(provider, preserve_excel_layout)
+        result = backend.translate(text, target_lang_name, target_lang_code, **kwargs)
+        result = clean_model_output(result)
+        return TranslationResult(text=result, provider=provider)
+
     def translate(
         self,
         text: str,
@@ -495,54 +563,22 @@ class TranslationManager:
         *,
         preserve_excel_layout: bool = False,
     ) -> TranslationResult:
-        """Translate with fallback chain. Returns text and the provider that succeeded."""
-        # 1. Determine provider order
-        primary = self.config.get_provider()
-        if self.config.data.get('fallback_enabled', True):
-            order = [primary]
-            for p in self.config.data.get('fallback_order', list(DEFAULT_FALLBACK_ORDER)):
-                if p != primary and p in self.backends:
-                    order.append(p)
-        else:
-            order = [primary]
-
-        # 2. Try each provider
-        last_error = None
-        for provider in order:
-            backend = self.backends.get(provider)
-            if not backend:
-                continue
-
-            # Skip providers that need API keys but don't have them
-            if provider in PROVIDERS_NEED_API_KEY and not self.config.get_api_key(provider):
-                continue
-
-            try:
-                logging.info(f"Trying provider: {provider}")
-                
-                kwargs = {}
-                if provider == PROVIDER_GEMINI:
-                    kwargs['api_key'] = self.config.get_api_key(PROVIDER_GEMINI)
-                    kwargs['model'] = self.config.get_gemini_model()
-                elif provider == PROVIDER_GROQ:
-                    kwargs['api_key'] = self.config.get_api_key(PROVIDER_GROQ)
-                    kwargs['model'] = self.config.get_groq_model()
-                elif provider == PROVIDER_NVIDIA:
-                    kwargs["api_key"] = self.config.get_api_key(PROVIDER_NVIDIA)
-                    kwargs["model"] = self.config.get_nvidia_model()
-
-                kwargs["preserve_excel_layout"] = preserve_excel_layout
-                result = backend.translate(text, target_lang_name, target_lang_code, **kwargs)
-                logging.info(f"Provider '{provider}' succeeded.")
-
-                result = clean_model_output(result)
-                return TranslationResult(text=result, provider=provider)
-            except Exception as e:
-                logging.warning(f"Provider '{provider}' failed: {e}")
-                last_error = e
-                continue
-
-        raise TranslationError(f"All translation providers failed. Last error: {last_error}")
+        """Translate using the configured provider only (no cross-provider fallback)."""
+        provider = self.config.get_provider()
+        logging.info("Translating with provider: %s", provider)
+        try:
+            out = self._run_provider(
+                provider,
+                text,
+                target_lang_name,
+                target_lang_code,
+                preserve_excel_layout=preserve_excel_layout,
+            )
+            logging.info("Provider '%s' succeeded.", provider)
+            return out
+        except Exception as e:
+            logging.warning("Provider '%s' failed: %s", provider, e)
+            raise
 
     def translate_with_provider(
         self,
@@ -558,23 +594,13 @@ class TranslationManager:
         if not backend:
             raise TranslationError(f"Unknown provider: {provider}")
 
-        if provider in PROVIDERS_NEED_API_KEY and not self.config.get_api_key(provider):
-            raise TranslationError(f"{provider_display_name(provider)} API key not configured")
-
-        kwargs: dict = {"preserve_excel_layout": preserve_excel_layout}
-        if provider == PROVIDER_GEMINI:
-            kwargs["api_key"] = self.config.get_api_key(PROVIDER_GEMINI)
-            kwargs["model"] = self.config.get_gemini_model()
-        elif provider == PROVIDER_GROQ:
-            kwargs["api_key"] = self.config.get_api_key(PROVIDER_GROQ)
-            kwargs["model"] = self.config.get_groq_model()
-        elif provider == PROVIDER_NVIDIA:
-            kwargs["api_key"] = self.config.get_api_key(PROVIDER_NVIDIA)
-            kwargs["model"] = self.config.get_nvidia_model()
-
-        result = backend.translate(text, target_lang_name, target_lang_code, **kwargs)
-        result = clean_model_output(result)
-        return TranslationResult(text=result, provider=provider)
+        return self._run_provider(
+            provider,
+            text,
+            target_lang_name,
+            target_lang_code,
+            preserve_excel_layout=preserve_excel_layout,
+        )
 
     def close(self) -> None:
         for backend in self.backends.values():

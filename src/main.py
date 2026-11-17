@@ -135,6 +135,7 @@ from constants import MODE_POPUP, MODE_REPLACE, PROVIDERS_NEED_API_KEY
 from tray import TrayIcon
 from hotkey_manager import HotkeyManager
 from translator import TranslationManager
+from translation_errors import format_translation_error_title
 from clipboard_util import ClipboardUtil
 from popup_window import PopupWindow
 from settings_window import SettingsWindow
@@ -247,7 +248,7 @@ class DirectTransApp:
 
                 self._run_on_main(finish_ok)
             except Exception as e:
-                err = msgs.get("err_trans_title", "Lỗi dịch: {}").format(str(e))
+                err = format_translation_error_title(e, ui_lang)
 
                 def finish_err():
                     if work_generation != self._current_generation:
@@ -560,18 +561,16 @@ class DirectTransApp:
         except Exception as e:
             if generation != self._current_generation:
                 return
-            err_msg = str(e)
+            err_msg = format_translation_error_title(e, ui_lang)
             logging.error(f"Translation failed: {err_msg}")
 
             def show_trans_error():
                 p = popup_holder.get("popup")
                 if p is not None:
-                    p.show_error(
-                        msgs.get('err_trans_title', 'Lỗi dịch: {}').format(err_msg)
-                    )
+                    p.show_error(err_msg)
                 else:
                     self._show_error_popup(
-                        msgs.get('err_trans_title', 'Lỗi dịch: {}').format(err_msg),
+                        err_msg,
                         target_lang_name,
                         target_lang_code,
                     )
@@ -580,7 +579,7 @@ class DirectTransApp:
                 self._run_on_main(show_trans_error)
             else:
                 self._show_error_popup(
-                    msgs.get('err_trans_title', 'Lỗi dịch: {}').format(err_msg),
+                    err_msg,
                     target_lang_name,
                     target_lang_code,
                 )
@@ -723,10 +722,17 @@ class DirectTransApp:
             current_val, _ = winreg.QueryValueEx(key, "DirectTrans")
             winreg.CloseKey(key)
 
-            expected_path = sys.executable
-            registered_path = current_val.strip('"')
-            if registered_path != expected_path:
-                logging.info(f"Auto-start path outdated ({current_val}), updating to current exe.")
+            from constants import WINDOWS_AUTOSTART_ARG
+
+            expected_exe = sys.executable
+            registered_path = current_val.strip('"').split()[0].strip('"')
+            needs_flag = WINDOWS_AUTOSTART_ARG not in current_val
+            if registered_path != expected_exe or needs_flag:
+                logging.info(
+                    "Auto-start registry outdated (%s), rewriting with %s.",
+                    current_val,
+                    WINDOWS_AUTOSTART_ARG,
+                )
                 self.config.set_auto_start(True)
         except FileNotFoundError:
             logging.info("Auto-start registry entry missing, re-creating.")

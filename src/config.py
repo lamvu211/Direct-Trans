@@ -10,10 +10,11 @@ import uuid
 import copy
 
 from constants import (
-    DEFAULT_FALLBACK_ORDER,
+    DEFAULT_GEMINI_MODEL,
     DEFAULT_PROVIDER,
     MODE_POPUP,
     NVIDIA_DEFAULT_MODEL,
+    WINDOWS_AUTOSTART_ARG,
     POPUP_WINDOW_MIN_HEIGHT,
     POPUP_WINDOW_MIN_WIDTH,
     PROVIDER_GEMINI,
@@ -32,9 +33,7 @@ class Config:
             PROVIDER_GROQ: "",
             PROVIDER_NVIDIA: "",
         },
-        "fallback_enabled": True,
-        "fallback_order": list(DEFAULT_FALLBACK_ORDER),
-        "gemini_model": "gemini-flash-lite-latest",
+        "gemini_model": DEFAULT_GEMINI_MODEL,
         "groq_model": "openai/gpt-oss-120b",
         "nvidia_model": NVIDIA_DEFAULT_MODEL,
         "auto_start": False,
@@ -67,11 +66,11 @@ class Config:
         self._theme_listener = None
         self.data = self._load()
         self._migrate_legacy_providers()
-        if getattr(sys, "frozen", False):
+        if getattr(sys, "frozen", False) and not is_windows_autostart_launch():
             self.reset_provider_models_to_defaults()
 
     def reset_provider_models_to_defaults(self):
-        """Reset AI model names to defaults (used on each packaged exe launch)."""
+        """Reset AI model names to defaults (manual packaged exe launch only)."""
         defaults = self.DEFAULT_CONFIG
         self.data["gemini_model"] = defaults["gemini_model"]
         self.data["groq_model"] = defaults["groq_model"]
@@ -86,20 +85,10 @@ class Config:
             self.data["translation_provider"] = PROVIDER_NVIDIA
             changed = True
 
-        order = self.data.get("fallback_order")
-        if isinstance(order, list):
-            new_order = []
-            order_changed = False
-            for p in order:
-                if p in ("mistral", "openrouter"):
-                    if PROVIDER_NVIDIA not in new_order:
-                        new_order.append(PROVIDER_NVIDIA)
-                    order_changed = True
-                elif p not in new_order:
-                    new_order.append(p)
-            if order_changed:
-                self.data["fallback_order"] = new_order
-                changed = True
+        if self.data.pop("fallback_enabled", None) is not None:
+            changed = True
+        if self.data.pop("fallback_order", None) is not None:
+            changed = True
 
         keys = self.data.setdefault("api_keys", {})
         for legacy in ("mistral", "openrouter"):
@@ -285,7 +274,7 @@ class Config:
         self.save()
 
     def get_gemini_model(self) -> str:
-        return self.data.get('gemini_model', 'gemini-flash-lite-latest')
+        return self.data.get("gemini_model", DEFAULT_GEMINI_MODEL)
 
     def set_gemini_model(self, model: str):
         self.data['gemini_model'] = model
@@ -365,7 +354,7 @@ class Config:
             )
             if enabled:
                 if getattr(sys, 'frozen', False):
-                    exe_path = f'"{sys.executable}"'
+                    exe_path = f'"{sys.executable}" {WINDOWS_AUTOSTART_ARG}'
                 else:
                     main_path = os.path.abspath(os.path.join(
                         os.path.dirname(__file__), 'main.py'
@@ -418,4 +407,8 @@ class Config:
         import time
         self.data['snooze_update_until'] = time.time() + (days * 86400)
         self.save()
+
+
+def is_windows_autostart_launch() -> bool:
+    return WINDOWS_AUTOSTART_ARG in sys.argv
 
