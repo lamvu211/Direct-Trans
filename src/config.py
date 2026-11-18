@@ -89,6 +89,8 @@ class Config:
             changed = True
         if self.data.pop("fallback_order", None) is not None:
             changed = True
+        if self.data.pop("fast_mode", None) is not None:
+            changed = True
 
         keys = self.data.setdefault("api_keys", {})
         for legacy in ("mistral", "openrouter"):

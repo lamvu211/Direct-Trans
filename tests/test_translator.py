@@ -13,6 +13,8 @@ from translator import (
     GoogleFreeTranslator,
     TranslationError,
     clean_model_output,
+    _gemini_generation_config,
+    _gemini_model_supports_thinking_budget,
 )
 
 
@@ -56,6 +58,16 @@ class TestTranslator(unittest.TestCase):
         with self.assertRaises(TranslationError) as ctx:
             t.translate("Hello", "Vietnamese", "vi", api_key="test_key", model="gemini-pro")
         self.assertIn("refused", str(ctx.exception).lower())
+
+    def test_gemini_thinking_budget_model_gate(self):
+        self.assertTrue(_gemini_model_supports_thinking_budget("gemini-3.1-flash-lite"))
+        self.assertTrue(_gemini_model_supports_thinking_budget("gemini-2.5-flash-lite"))
+        self.assertFalse(_gemini_model_supports_thinking_budget("gemini-3.5-flash-lite"))
+        self.assertFalse(_gemini_model_supports_thinking_budget("gemini-flash-lite-latest"))
+        cfg_31 = _gemini_generation_config("gemini-3.1-flash-lite")
+        cfg_35 = _gemini_generation_config("gemini-3.5-flash-lite")
+        self.assertIn("thinkingConfig", cfg_31)
+        self.assertNotIn("thinkingConfig", cfg_35)
 
     def test_clean_model_output(self):
         self.assertEqual(

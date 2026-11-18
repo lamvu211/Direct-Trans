@@ -2,7 +2,7 @@
 
 ## v2.0.18
 - **Translation**: Removed cross-provider fallback (`fallback_enabled` / `fallback_order` dropped from `config.json` on load). One selected provider per request; failures show localized messages (HTTP codes, timeout, network) via `translation_errors.py`.
-- **Translation**: No HTTP retries on 429/503/network; 12s request timeout. Gemini default model **`gemini-3.1-flash-lite`**, `temperature` 0.2, thinking budget 0.
+- **Translation**: No HTTP retries on 429/503/network; 12s request timeout. Gemini default model **`gemini-3.1-flash-lite`**, `temperature` 0.2; `thinkingBudget: 0` only for models that accept it (fixes HTTP 400 on `gemini-3.5-flash-lite` / `gemini-flash-lite-latest`).
 - **Popup**: Provider dropdown disabled while loading; enabled after a result or error.
 - **Startup**: Manual packaged launch resets model names to defaults; **Start with Windows** uses `--windows-autostart` and keeps user model choices.
 - **Build**: `APP_VERSION` **2.0.18**; artifact **`DirectTrans_v2.0.18.exe`**.

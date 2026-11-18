@@ -58,6 +58,7 @@ class MockConfig:
         return 'nvidia-test'
 
 
+
 class TestTranslationManager(unittest.TestCase):
     def _manager_with_stubs(self, config, stubs):
         mgr = TranslationManager(config)

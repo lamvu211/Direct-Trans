@@ -271,6 +271,7 @@ class QtSettingsWindow(QWidget):
         self._autostart_cb.setChecked(self.config.is_auto_start())
         self._autostart_cb.toggled.connect(self._on_autostart)
         opt_body.addWidget(self._autostart_cb)
+
         lay.addWidget(opt_card)
         lay.addStretch(1)
 

@@ -301,6 +301,27 @@ EXCEL CLIPBOARD (TSV):
 - Translate the readable text in all cells (whether enclosed in quotes or unquoted)."""
 
 
+def _gemini_model_supports_thinking_budget(model: str) -> bool:
+    """Some flash-lite model IDs reject thinkingConfig (API 400 INVALID_ARGUMENT)."""
+    name = (model or "").lower().strip()
+    if not name:
+        return False
+    if name in ("gemini-flash-lite-latest", "gemini-3.5-flash-lite"):
+        return False
+    if "3.5-flash-lite" in name:
+        return False
+    if any(tag in name for tag in ("-image", "-tts", "preview")):
+        return False
+    return True
+
+
+def _gemini_generation_config(model: str) -> dict:
+    cfg: dict = {"temperature": 0.2}
+    if _gemini_model_supports_thinking_budget(model):
+        cfg["thinkingConfig"] = {"thinkingBudget": 0}
+    return cfg
+
+
 def _system_prompt(target_lang_name: str, preserve_excel_layout: bool = False) -> str:
     prompt = SYSTEM_PROMPT.format(target_lang=target_lang_name)
     if preserve_excel_layout:
@@ -327,10 +348,7 @@ class GeminiTranslator(BaseHTTPTranslator):
             "contents": [{
                 "parts": [{"text": f"<text>\n{text}\n</text>"}]
             }],
-            "generationConfig": {
-                "temperature": 0.2,
-                "thinkingConfig": {"thinkingBudget": 0},
-            },
+            "generationConfig": _gemini_generation_config(model),
         }
 
         try:
