@@ -86,11 +86,11 @@ class TestAppIntegration(unittest.TestCase):
 
             for _ in range(20):
                 time.sleep(0.05)
-                if combo.count() > 1 or combo.currentText() == "gemini-3.1-flash-lite":
+                if combo.count() > 1 or combo.currentText() == "gemini-flash-lite-latest":
                     break
             self.assertIn(
                 combo.currentText(),
-                ("gemini-3.1-flash-lite", "Fetching..."),
+                ("gemini-flash-lite-latest", "Fetching..."),
             )
 
 

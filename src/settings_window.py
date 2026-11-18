@@ -4,6 +4,8 @@ settings_window.py - Facade for Settings UI (PySide6 all-in-one).
 
 from __future__ import annotations
 
+import sys
+
 from ui.qt.settings_window import QtSettingsWindow, ensure_qt_app
 
 
@@ -56,6 +58,8 @@ class SettingsWindow:
                 on_before_api_test=self.on_before_api_test,
             )
             self.window = self._qt
+            if getattr(sys, "frozen", False):
+                self._qt._deferred_win32_focus = True
         self._qt.restore_and_focus()
 
     def _handle_close(self):

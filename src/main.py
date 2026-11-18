@@ -648,6 +648,7 @@ class DirectTransApp:
             self._win32_startup_splash = None
             try:
                 win32_splash.close()
+                win32_splash.wait_until_closed(0.75)
             except Exception:
                 logging.exception("Failed to close Win32 startup splash")
 
@@ -663,6 +664,16 @@ class DirectTransApp:
     def _focus_settings_window(self) -> None:
         if self.settings_window and self.settings_window.is_open():
             self.settings_window.restore_and_focus()
+
+    def _schedule_startup_settings_focus(self) -> None:
+        """Packaged exe: splash close and foreground token are async — retry focus."""
+        if not getattr(self, "_schedule_ms", None):
+            return
+        if getattr(sys, "frozen", False):
+            for delay in (80, 250, 550):
+                self._schedule_ms(delay, self._focus_settings_window)
+        else:
+            self._schedule_ms(80, self._focus_settings_window)
 
     def _show_settings(self):
         """Open settings window."""
@@ -680,8 +691,7 @@ class DirectTransApp:
             if self.settings_window and self.settings_window.is_open():
                 logging.info("Settings window already exists. Restoring and focusing.")
                 self.settings_window.restore_and_focus()
-                if getattr(self, "_schedule_ms", None):
-                    self._schedule_ms(80, self._focus_settings_window)
+                self._schedule_startup_settings_focus()
                 return
 
             def on_settings_closed():
@@ -696,8 +706,7 @@ class DirectTransApp:
                 on_before_api_test=self.cancel_ongoing_translations,
             )
             self.settings_window.show()
-            if getattr(self, "_schedule_ms", None):
-                self._schedule_ms(80, self._focus_settings_window)
+            self._schedule_startup_settings_focus()
             logging.info("Settings window opened.")
         except Exception as e:
             logging.exception("Failed to open settings window: %s", e)

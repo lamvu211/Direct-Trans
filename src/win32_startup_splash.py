@@ -246,6 +246,14 @@ class Win32StartupSplash:
                 return
             time.sleep(0.02)
 
+    def wait_until_closed(self, timeout: float = 1.0) -> None:
+        """Wait until the splash HWND is gone (after ``close()``)."""
+        deadline = time.monotonic() + max(0.0, timeout)
+        while time.monotonic() < deadline:
+            if self._hwnd is None:
+                return
+            time.sleep(0.02)
+
     def _on_create(self, hwnd: int) -> None:
         self._hwnd = hwnd
         if self._closed:

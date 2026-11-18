@@ -30,7 +30,7 @@ PROVIDERS_NEED_API_KEY = (PROVIDER_GEMINI, PROVIDER_GROQ, PROVIDER_NVIDIA)
 DEFAULT_PROVIDER = PROVIDER_GEMINI
 ALL_PROVIDERS = tuple(p.value for p in Provider)
 
-DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite"
+DEFAULT_GEMINI_MODEL = "gemini-flash-lite-latest"
 NVIDIA_DEFAULT_MODEL = "nvidia/nemotron-3.5-bolt-e4b"
 WINDOWS_AUTOSTART_ARG = "--windows-autostart"
 NVIDIA_CHAT_COMPLETIONS_URL = "https://integrate.api.nvidia.com/v1/chat/completions"

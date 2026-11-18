@@ -7,7 +7,7 @@ import os
 import sys
 import webbrowser
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QCloseEvent, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -436,6 +436,17 @@ class QtSettingsWindow(QWidget):
         super().showEvent(event)
         self._fit_header_combos()
         self._sync_form_layout()
+        if getattr(self, "_deferred_win32_focus", False):
+            self._deferred_win32_focus = False
+            QTimer.singleShot(0, self._apply_win32_foreground)
+
+    def _apply_win32_foreground(self) -> None:
+        try:
+            from win32_foreground import bring_qt_widget_to_foreground
+
+            bring_qt_widget_to_foreground(self)
+        except Exception:
+            pass
 
     def restore_and_focus(self):
         self.showNormal()
